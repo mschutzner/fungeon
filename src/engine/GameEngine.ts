@@ -1,19 +1,18 @@
 import * as THREE from 'three';
 import { InputManager } from './InputManager';
 import { Player } from './Player';
-import { Room } from './Room';
 import { Chest } from './Chest';
 import { GameCamera } from './GameCamera';
-import { GameConfig } from './GameConfig';
+import { GameConfig, GameSettings } from './GameConfig';
+import { TimeManager } from './TimeManager';
+import { EventSystem } from './EventSystem';
+import { EntityManager } from './EntityManager';
+import { CameraFollowComponent } from './components/CameraFollowComponent';
+import { TileRoom } from './world/TileRoom';
 
 export interface GameState {
     playerPosition: THREE.Vector3;
     cameraAngle: number;
-}
-
-interface WallConfig {
-    position: [number, number, number];
-    rotation: [number, number, number];
 }
 
 export class GameEngine {
@@ -23,24 +22,30 @@ export class GameEngine {
     private clock: THREE.Clock;
     private inputManager: InputManager;
     private player: Player;
-    private room: Room;
     private chest: Chest;
     private lastTick: number = 0;
     private readonly TICK_RATE: number = 100; // ms
     private readonly config: GameConfig;
-    private light: THREE.PointLight;
-    private readonly FLICKER_SPEED: number = 8; // Base speed of flicker
-    private readonly FLICKER_AMOUNT: number = 0.05; // How much to flicker (±10% of base intensity)
-    private readonly BASE_LIGHT_INTENSITY: number = 1.5;
+    private timeManager: TimeManager;
+    private eventSystem: EventSystem;
+    private entityManager: EntityManager;
+    private isRunning: boolean = false;
+    private tileRoom: TileRoom;
 
     constructor() {
         this.scene = new THREE.Scene();
         this.clock = new THREE.Clock();
         this.inputManager = InputManager.getInstance();
         this.config = GameConfig.getInstance();
+        this.timeManager = TimeManager.getInstance();
+        this.eventSystem = EventSystem.getInstance();
+        this.entityManager = EntityManager.getInstance();
+        
+        // Set up engine reference in config
+        this.config.setEngine(this);
         
         // Setup camera
-        this.gameCamera = new GameCamera(6);
+        this.gameCamera = new GameCamera(this, this.config.getSettings().cameraViewSize);
         
         // Setup renderer
         this.renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -68,36 +73,40 @@ export class GameEngine {
         document.body.appendChild(container);
 
         // Add ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
-
-        // Add point light with shadows
-        this.light = new THREE.PointLight(0xffffff, this.BASE_LIGHT_INTENSITY);
-        this.light.castShadow = true;
-        this.light.shadow.mapSize.width = 256;  // Reduced for sharper pixels
-        this.light.shadow.mapSize.height = 256; // Reduced for sharper pixels
-        this.light.shadow.camera.near = 0.1;
-        this.light.shadow.camera.far = 20;
-        this.light.shadow.bias = -0.002;        // Adjusted for hard shadows
-        this.light.shadow.radius = 0;           // No blur radius for sharp shadows
-        
-        // Position light at origin
-        const lightPos = new THREE.Vector3(0, 3.5, 0);
-        this.light.position.copy(lightPos);
-        this.scene.add(this.light);
 
         // Create game objects
         this.player = new Player(this);
-        this.room = new Room(this);
-        
-        // Create chest and position it in the room
-        const chestPosition = new THREE.Vector3(1.5, 0, 1.5); // Offset from center
-        this.chest = new Chest(this, chestPosition);
+        this.chest = new Chest(this, new THREE.Vector3(1.5, 0, 1.5));
+        this.tileRoom = new TileRoom(this);
+
+        // Register entities
+        this.entityManager.register(this.player);
+        this.entityManager.register(this.chest);
+        this.entityManager.register(this.gameCamera);
+        this.entityManager.register(this.tileRoom);
+
+        // Add camera follow component
+        const cameraFollow = new CameraFollowComponent(this.gameCamera, this.player);
+        this.gameCamera.addComponent('cameraFollow', cameraFollow);
 
         // Add objects to scene
         this.scene.add(this.player.getMesh());
-        this.scene.add(this.room.getMesh());
         this.scene.add(this.chest.getMesh());
+        this.scene.add(this.tileRoom.getMesh());
+
+        // Load the starting room
+        this.loadStartingRoom();
+    }
+
+    private async loadStartingRoom(): Promise<void> {
+        try {
+            await this.tileRoom.loadRoom('starting_room');
+        } catch (error) {
+            console.error('Failed to load starting room:', error);
+            // Handle room loading failure - could show an error message or try alternative room
+        }
     }
 
     public createPaletteMaterial(diffuseColor: THREE.Color, objectPalette: number[]): THREE.Material {
@@ -118,7 +127,6 @@ export class GameEngine {
             vertexShader: `
                 #include <common>
                 #include <shadowmap_pars_vertex>
-                #include <lights_pars_begin>
                 
                 varying vec2 vUv;
                 varying vec3 vNormal;
@@ -281,17 +289,6 @@ export class GameEngine {
                     #endif
                     
                     // Calculate lighting using THREE.js light uniforms
-                    #if NUM_DIR_LIGHTS > 0
-                    DirectionalLight directionalLight;
-                    vec3 directionalDiffuse;
-                    for(int i = 0; i < NUM_DIR_LIGHTS; i++) {
-                        directionalLight = directionalLights[i];
-                        float dirDiff = max(dot(normal, directionalLight.direction), 0.0);
-                        directionalDiffuse = directionalLight.color * dirDiff;
-                        litColor += directionalDiffuse;
-                    }
-                    #endif
-
                     #if NUM_POINT_LIGHTS > 0
                     PointLight pointLight;
                     vec3 pointDiffuse;
@@ -365,6 +362,12 @@ export class GameEngine {
         return this.gameCamera.getAngle();
     }
 
+    public handleSettingsUpdate(newSettings: Partial<GameSettings>): void {
+        if (newSettings.cameraViewSize !== undefined) {
+            this.gameCamera.updateViewSize(newSettings.cameraViewSize);
+        }
+    }
+
     public getColors(): { [key: string]: THREE.Color } {
         return this.config.getColors();
     }
@@ -373,39 +376,57 @@ export class GameEngine {
         return this.chest;
     }
 
+    public getPlayer(): Player {
+        return this.player;
+    }
+
     private update(): void {
-        const currentTime = this.clock.getElapsedTime() * 1000;
-        const deltaTime = currentTime - this.lastTick;
+        if (!this.isRunning) return;
+
+        const deltaTime = this.clock.getDelta() * 1000; // Convert to milliseconds
+        const timing = this.timeManager.update(deltaTime);
         
-        // Add subtle flicker to the point light
-        const time = this.clock.getElapsedTime();
-        const flicker = Math.sin(time * this.FLICKER_SPEED) * 0.3 +
-                       Math.sin(time * this.FLICKER_SPEED * 2.7) * 0.2 +
-                       Math.sin(time * this.FLICKER_SPEED * 4.1) * 0.1;
-        this.light.intensity = this.BASE_LIGHT_INTENSITY + (flicker * this.FLICKER_AMOUNT);
+        // Process input before fixed updates
+        this.inputManager.update();
         
-        // Check if it's time for a game tick
-        if (deltaTime >= this.TICK_RATE) {
-            // Update game objects
-            this.player.update(deltaTime);
-            this.room.update(deltaTime);
-            this.chest.update(deltaTime);
-            this.gameCamera.update(deltaTime);
-            
-            // Update camera target to follow player
-            this.gameCamera.setTarget(this.player.getPosition());
-            
-            // Update input state
-            this.inputManager.update();
-            
-            this.lastTick = currentTime;
+        // Fixed update step for game logic
+        for (let i = 0; i < timing.fixedStepCount; i++) {
+            this.entityManager.update(this.timeManager.getFixedTimeStep());
         }
 
+        // Variable update step for rendering
+        this.entityManager.renderUpdate(timing.deltaTime, timing.interpolationAlpha);
+
+        // Render the scene
         this.renderer.render(this.scene, this.gameCamera.getCamera());
+
+        // Schedule next frame
         requestAnimationFrame(() => this.update());
     }
 
     public start(): void {
+        this.isRunning = true;
+        this.timeManager.resume();
+        this.eventSystem.emit('game:start', undefined);
         this.update();
+    }
+
+    public pause(): void {
+        this.isRunning = false;
+        this.timeManager.pause();
+        this.eventSystem.emit('game:pause', undefined);
+    }
+
+    public resume(): void {
+        if (!this.isRunning) {
+            this.isRunning = true;
+            this.timeManager.resume();
+            this.eventSystem.emit('game:resume', undefined);
+            this.update();
+        }
+    }
+
+    public getCurrentRoom(): TileRoom {
+        return this.tileRoom;
     }
 } 

@@ -20,7 +20,7 @@ A retro-style 3D dungeon crawler game built with Three.js and TypeScript.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/fungeon.git
+git clone https://github.com/mschutzner/fungeon.git
 cd fungeon
 ```
 

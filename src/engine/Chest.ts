@@ -2,13 +2,18 @@ import * as THREE from 'three';
 import { GameObject } from './GameObject';
 import { GameEngine } from './GameEngine';
 import { GameConfig } from './GameConfig';
+import { EventSystem } from './EventSystem';
 
 export class Chest extends GameObject {
     private readonly config: GameConfig;
+    private eventSystem: EventSystem;
+    private interactionRange: number = 1.5;
+    private isInteractable: boolean = true;
 
     constructor(engine: GameEngine, position: THREE.Vector3 = new THREE.Vector3()) {
         super(engine, position);
         this.config = GameConfig.getInstance();
+        this.eventSystem = EventSystem.getInstance();
         this.createMesh();
         
         // Position the chest so its bottom is at floor level
@@ -42,9 +47,24 @@ export class Chest extends GameObject {
         this.mesh = new THREE.Mesh(bodyGeometry, material);
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
+        this.mesh.position.copy(this.position);
     }
 
     public update(deltaTime: number): void {
-        // No update behavior needed for now
+        if (!this.isInteractable) return;
+
+        // Check for nearby player
+        const playerPos = this.engine.getPlayer().getPosition();
+        const distance = this.position.distanceTo(playerPos);
+
+        if (distance <= this.interactionRange) {
+            this.eventSystem.emit('chest:interact', { position: this.position.clone() });
+            this.isInteractable = false; // Prevent multiple rapid interactions
+            
+            // Reset interactability after a delay
+            setTimeout(() => {
+                this.isInteractable = true;
+            }, 1000);
+        }
     }
 } 

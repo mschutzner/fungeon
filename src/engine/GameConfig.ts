@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GameEngine } from './GameEngine';
 
 export interface GameSettings {
     // Camera settings
@@ -12,10 +13,6 @@ export interface GameSettings {
     // Player settings
     playerMoveSpeed: number;
     playerSize: { radius: number; height: number };
-
-    // Room settings
-    roomSize: number;
-    roomHeight: number;
 
     // Chest settings
     chestSize: { width: number; height: number; depth: number };
@@ -47,28 +44,25 @@ export interface GameSettings {
 export class GameConfig {
     private static instance: GameConfig;
     private settings: GameSettings;
+    private engine: GameEngine | null = null;
 
     private constructor() {
         // Default settings
         this.settings = {
             // Camera settings
-            cameraViewSize: 4, // Tight zoom for pixel-perfect edges
-            cameraHeight: 4, // Reduced to match new view size
-            cameraDistance: 6, // Reduced to match new view size
+            cameraViewSize: 3.77, // Makes 1 unit = 24 pixels at 30° elevation (224px / 24px/unit * cos(30°))
+            cameraHeight: 4, // Slightly lower for better view
+            cameraDistance: 5, // Match room size
             cameraRotationSpeed: Math.PI / 12, // 15 degrees for proper angle snapping
             cameraInitialAngle: Math.PI / 6 + Math.PI / 4, // 75° from positive X axis
             cameraElevationAngle: Math.PI / 6, // 30° elevation
 
             // Player settings
-            playerMoveSpeed: 0.4,
+            playerMoveSpeed: 0.375,
             playerSize: {
-                radius: 0.4,
-                height: 1.7
+                radius: 0.3,
+                height: 1.75  // Total height including hemisphere caps
             },
-
-            // Room settings
-            roomSize: 8, // Larger room for better edge visibility
-            roomHeight: 3,
 
             // Chest settings
             chestSize: {
@@ -145,6 +139,14 @@ export class GameConfig {
             ...newSettings
         };
         this.saveSettings();
+        // Notify engine of settings change
+        if (this.engine) {
+            this.engine.handleSettingsUpdate(newSettings);
+        }
+    }
+
+    public setEngine(engine: GameEngine): void {
+        this.engine = engine;
     }
 
     public getColors(): { [key: string]: THREE.Color } {

@@ -3,33 +3,52 @@ import { GameObject } from './GameObject';
 import { GameEngine } from './GameEngine';
 import { InputManager } from './InputManager';
 import { GameConfig } from './GameConfig';
+import { EventSystem } from './EventSystem';
 
 export class Player extends GameObject {
     private readonly config: GameConfig;
     private inputManager: InputManager;
+    private eventSystem: EventSystem;
 
     constructor(engine: GameEngine, position: THREE.Vector3 = new THREE.Vector3()) {
         super(engine, position);
         this.config = GameConfig.getInstance();
         this.inputManager = InputManager.getInstance();
+        this.eventSystem = EventSystem.getInstance();
         this.createMesh();
         
-        // Position the player so the bottom of the capsule is at y=0 (floor level)
+        // Position the player at floor level
+        // Since the capsule is centered vertically, we need to move it up by half its height
+        this.position.y = 0;
         const settings = this.config.getSettings();
-        // Total capsule height = cylindrical section + 2 hemispheres (top and bottom)
-        const totalHeight = settings.playerSize.height + 2 * settings.playerSize.radius;
-        // Position at half the total height to place bottom on floor
-        this.position.y = totalHeight / 2;
-        this.mesh.position.copy(this.position);
+        this.mesh.position.y = settings.playerSize.height / 2;
+        this.mesh.position.x = this.position.x;
+        this.mesh.position.z = this.position.z;
+    }
+
+    public setPosition(position: THREE.Vector3): void {
+        super.setPosition(position);
+        // Keep the mesh's y position at half height while following x,z movement
+        this.mesh.position.x = this.position.x;
+        this.mesh.position.z = this.position.z;
+        // Maintain the y offset for the mesh (half the total height)
+        this.mesh.position.y = this.config.getSettings().playerSize.height / 2;
+        // Emit movement event when position changes
+        this.eventSystem.emit('player:move', { position: this.position.clone() });
     }
 
     private createMesh(): void {
         const settings = this.config.getSettings();
+        const radius = settings.playerSize.radius;
+        // For a capsule, the total height includes the cylinder section plus two hemisphere caps
+        // So we subtract 2 * radius (the hemispheres) to get the cylinder height
+        const cylinderHeight = settings.playerSize.height - (2 * radius);
+
         const geometry = new THREE.CapsuleGeometry(
-            settings.playerSize.radius,
-            settings.playerSize.height,
-            8,  // Increased radial segments (was 4)
-            16  // Increased height segments (was 8)
+            radius,
+            cylinderHeight, // Just the cylinder portion, caps will be added automatically
+            8,  // radial segments
+            16  // height segments
         );
 
         // Get player palette from config
@@ -86,103 +105,72 @@ export class Player extends GameObject {
     
     private moveWithSliding(movement: THREE.Vector3): void {
         const settings = this.config.getSettings();
-        const playerRadius = settings.playerSize.radius;
-        const halfRoomSize = settings.roomSize / 2;
-        const buffer = playerRadius * 1.1; // Collision buffer
+        const radius = settings.playerSize.radius;
+        const room = this.engine.getCurrentRoom();
         
-        // Calculate new position without constraints
-        const newPosition = new THREE.Vector3(
-            this.position.x + movement.x,
-            this.position.y,
-            this.position.z + movement.z
-        );
+        // Try to move in both X and Z independently
+        const newPosition = this.position.clone();
+        let collision = false;
         
-        // Check wall collisions and apply sliding
-        let xMove = movement.x;
-        let zMove = movement.z;
-        
-        // Right wall collision (x+)
-        if (newPosition.x > halfRoomSize - buffer) {
-            xMove = halfRoomSize - buffer - this.position.x;
+        // Try X movement
+        newPosition.x += movement.x;
+        // Use room width for X bounds
+        const halfWidth = (room.getWidth() - 1) / 2;
+        if (Math.abs(newPosition.x) + radius > halfWidth) {
+            newPosition.x = Math.sign(newPosition.x) * (halfWidth - radius);
+            collision = true;
         }
         
-        // Left wall collision (x-)
-        if (newPosition.x < -halfRoomSize + buffer) {
-            xMove = -halfRoomSize + buffer - this.position.x;
-        }
-        
-        // Back wall collision (z+)
-        if (newPosition.z > halfRoomSize - buffer) {
-            zMove = halfRoomSize - buffer - this.position.z;
-        }
-        
-        // Front wall collision (z-)
-        if (newPosition.z < -halfRoomSize + buffer) {
-            zMove = -halfRoomSize + buffer - this.position.z;
+        // Try Z movement
+        newPosition.z += movement.z;
+        // Use room height for Z bounds
+        const halfHeight = (room.getHeight() - 1) / 2;
+        if (Math.abs(newPosition.z) + radius > halfHeight) {
+            newPosition.z = Math.sign(newPosition.z) * (halfHeight - radius);
+            collision = true;
         }
 
-        // Check chest collision
+        // Check collision with chest
         const chest = this.engine.getChest();
-        const chestPos = chest.getPosition();
-        const chestSize = this.config.getSettings().chestSize;
-        const chestHalfWidth = chestSize.width / 2;
-        const chestHalfDepth = chestSize.depth / 2;
-        
-        // Calculate chest bounds
-        const chestMinX = chestPos.x - chestHalfWidth;
-        const chestMaxX = chestPos.x + chestHalfWidth;
-        const chestMinZ = chestPos.z - chestHalfDepth;
-        const chestMaxZ = chestPos.z + chestHalfDepth;
-        
-        // Expand bounds by player radius
-        const expandedMinX = chestMinX - buffer;
-        const expandedMaxX = chestMaxX + buffer;
-        const expandedMinZ = chestMinZ - buffer;
-        const expandedMaxZ = chestMaxZ + buffer;
-        
-        // Test if new position would collide with chest
-        const newX = this.position.x + xMove;
-        const newZ = this.position.z + zMove;
-        
-        // Handle X-axis collision
-        if (newZ > expandedMinZ && newZ < expandedMaxZ) {
-            if (this.position.x <= expandedMinX && newX > expandedMinX) {
-                // Colliding from left
-                xMove = expandedMinX - this.position.x;
-            } else if (this.position.x >= expandedMaxX && newX < expandedMaxX) {
-                // Colliding from right
-                xMove = expandedMaxX - this.position.x;
+        if (chest) {
+            const chestPos = chest.getPosition();
+            const chestSize = settings.chestSize;
+            const dx = Math.abs(newPosition.x - chestPos.x);
+            const dz = Math.abs(newPosition.z - chestPos.z);
+            
+            if (dx < (chestSize.width / 2 + radius) && dz < (chestSize.depth / 2 + radius)) {
+                // Handle chest collision
+                if (dx > dz) {
+                    newPosition.x = chestPos.x + Math.sign(newPosition.x - chestPos.x) * (chestSize.width / 2 + radius);
+                } else {
+                    newPosition.z = chestPos.z + Math.sign(newPosition.z - chestPos.z) * (chestSize.depth / 2 + radius);
+                }
+                collision = true;
+                this.eventSystem.emit('player:collide', { object: 'chest' });
             }
         }
-        
-        // Handle Z-axis collision
-        if (newX > expandedMinX && newX < expandedMaxX) {
-            if (this.position.z <= expandedMinZ && newZ > expandedMinZ) {
-                // Colliding from front
-                zMove = expandedMinZ - this.position.z;
-            } else if (this.position.z >= expandedMaxZ && newZ < expandedMaxZ) {
-                // Colliding from back
-                zMove = expandedMaxZ - this.position.z;
-            }
+
+        if (collision) {
+            this.eventSystem.emit('player:collide', { object: 'wall' });
         }
         
-        // Apply the allowed movement (sliding along walls and chest if needed)
-        this.position.x += xMove;
-        this.position.z += zMove;
-        this.mesh.position.copy(this.position);
+        // Update position
+        this.setPosition(newPosition);
     }
     
     private isValidPosition(position: THREE.Vector3): boolean {
         const settings = this.config.getSettings();
         const playerRadius = settings.playerSize.radius;
-        const halfRoomSize = settings.roomSize / 2;
+        const room = this.engine.getCurrentRoom();
+        const halfWidth = (room.getWidth() - 1) / 2;
+        const halfHeight = (room.getHeight() - 1) / 2;
         const buffer = playerRadius * 1.1; // Add a small buffer for better collision
         
         // Check each wall boundary
-        if (position.x > halfRoomSize - buffer) return false; // Right wall
-        if (position.x < -halfRoomSize + buffer) return false; // Left wall
-        if (position.z > halfRoomSize - buffer) return false; // Back wall
-        if (position.z < -halfRoomSize + buffer) return false; // Front wall
+        if (position.x > halfWidth - buffer) return false; // Right wall
+        if (position.x < -halfWidth + buffer) return false; // Left wall
+        if (position.z > halfHeight - buffer) return false; // Back wall
+        if (position.z < -halfHeight + buffer) return false; // Front wall
         
         return true;
     }
