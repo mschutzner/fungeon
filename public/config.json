@@ -1,0 +1,9 @@
+{
+  "resolution": {
+    "width": 224,
+    "height": 224
+  },
+  "tickRate": 0.1,
+  "debug": true,
+  "startState": "TestState"
+} 
