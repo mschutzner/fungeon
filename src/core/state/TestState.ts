@@ -4,6 +4,9 @@ import { Renderer } from '../../rendering/Renderer';
 import { TextBox } from '../../ui/elements/TextBox';
 import { UIPanel } from '../../ui/elements/UIPanel';
 import { Engine } from '../Engine';
+import { InputManager } from '../input/InputManager';
+import { EventSystem } from '../events/EventSystem';
+import { InputEventType } from '../input/InputManager';
 
 /**
  * Test state with a rotating cube
@@ -15,14 +18,27 @@ export class TestState extends State {
   // UI elements
   private fpsCounter: TextBox | null = null;
   private infoText: TextBox | null = null;
+  private controlsText: TextBox | null = null;
   private statusText: TextBox | null = null;
+  private mousePositionText: TextBox | null = null;
   
   // Reference to engine
   private engine: Engine;
   
+  // Input manager
+  private inputManager: InputManager;
+  
+  // Event system
+  private eventSystem: EventSystem;
+  
+  // Event subscription cleanup
+  private eventUnsubscribe: (() => void)[] = [];
+  
   constructor(engine: Engine) {
     super('test');
     this.engine = engine;
+    this.inputManager = InputManager.getInstance();
+    this.eventSystem = EventSystem.getInstance();
   }
   
   /**
@@ -40,6 +56,9 @@ export class TestState extends State {
     const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
     this.cube = new THREE.Mesh(geometry, material);
     this.scene.add(this.cube);
+    
+    // Subscribe to mouse events
+    this.subscribeToEvents();
     
     return Promise.resolve();
   }
@@ -59,6 +78,9 @@ export class TestState extends State {
     
     this.cube = null;
     this.scene = null;
+    
+    // Clean up event subscriptions
+    this.unsubscribeFromEvents();
     
     return Promise.resolve();
   }
@@ -80,10 +102,23 @@ export class TestState extends State {
    * Update the test state
    */
   update(deltaTime: number): void {
-    // Rotate the cube
+    // Check for held keys to rotate the cube
     if (this.cube) {
-      this.cube.rotation.x += 0.1;
-      this.cube.rotation.y += 0.1;
+      const rotationAmount = 0.2; // Scale rotation by delta time
+      
+      // Check WASD keys
+      if (this.inputManager.isKeyDown('w')) {
+        this.cube.rotation.x -= rotationAmount;
+      }
+      if (this.inputManager.isKeyDown('s')) {
+        this.cube.rotation.x += rotationAmount;
+      }
+      if (this.inputManager.isKeyDown('a')) {
+        this.cube.rotation.y -= rotationAmount;
+      }
+      if (this.inputManager.isKeyDown('d')) {
+        this.cube.rotation.y += rotationAmount;
+      }
     }
     
     // Update FPS text
@@ -91,6 +126,43 @@ export class TestState extends State {
       // Use explicit line break for better formatting
       this.fpsCounter.setText(`FPS: ${this.engine.getFps()}\nTPS: ${this.engine.getTps()}`);
     }
+
+    if(this.statusText) {
+      this.statusText.setText('READY');
+    }
+  }
+  
+  /**
+   * Subscribe to events
+   */
+  private subscribeToEvents(): void {
+    // Subscribe to mouse move events
+    const mouseMoveUnsub = this.eventSystem.subscribe(InputEventType.MOUSE_MOVE, (data) => {
+      // Update mouse position text with mouse position
+      if (this.mousePositionText) {
+        this.mousePositionText.setText(`Mouse: ${Math.floor(data.x)}, ${Math.floor(data.y)}`);
+      }
+    });
+    
+    // Store unsubscribe functions
+    this.eventUnsubscribe.push(mouseMoveUnsub);
+    
+    console.log('Subscribed to input events');
+  }
+  
+  /**
+   * Unsubscribe from events
+   */
+  private unsubscribeFromEvents(): void {
+    // Call all unsubscribe functions
+    for (const unsub of this.eventUnsubscribe) {
+      unsub();
+    }
+    
+    // Clear the array
+    this.eventUnsubscribe = [];
+    
+    console.log('Unsubscribed from input events');
   }
   
   /**
@@ -121,18 +193,51 @@ export class TestState extends State {
     this.infoText.setPadding(5);
     uiSystem.addElement(this.infoText);
     
-    // Status indicator in the bottom-right
+    // Info panel in the center
+    const controlsText = 'WASD to rotate cube';
+    this.controlsText = new TextBox(
+      renderer.getWidth() / 2 - 100,
+      154,
+      200,
+      24,
+      controlsText,
+      'vga',
+      1,
+      '#ffffff',
+      'center'
+    );
+    this.controlsText.setBorder('#ffffff', 1);
+    this.controlsText.setPadding(5);
+    uiSystem.addElement(this.controlsText);
+    
+    // Status indicator in the bottom-right (updated by event system)
     this.statusText = new TextBox(
       renderer.getWidth() - 110,
       renderer.getHeight() - 30,
       100,
-      20,
-      'READY',
-      'tiny',
-      2,
-      '#ffff00',
+      12,
+      'INITIALIZING',
+      'vga',
+      1,
+      '#ff00ff',
       'right'
     );
     uiSystem.addElement(this.statusText);
+    
+    // Mouse position indicator in the bottom-left (updated by polling)
+    this.mousePositionText = new TextBox(
+      10,
+      renderer.getHeight() - 16,
+      120,
+      20,
+      'Mouse: 0, 0',
+      'tiny',
+      1,
+      '#00ffff',
+      'left'
+    );
+    uiSystem.addElement(this.mousePositionText);
+    
+    console.log('UI elements created');
   }
 } 

@@ -2,14 +2,30 @@ import * as THREE from 'three';
 import { Renderer } from '../rendering/Renderer';
 import { Config } from './Config';
 import { StateManager } from './state/StateManager';
+import { EventSystem } from './events/EventSystem';
+import { ServiceManager } from './services/ServiceManager';
+import { InputManager } from './input/InputManager';
 
+/**
+ * Main game engine class
+ */
 export class Engine {
-  private isRunning: boolean = false;
+  private config!: Config;
+  private renderer!: Renderer;
+  private stateManager!: StateManager;
+  private eventSystem!: EventSystem;
+  private serviceManager!: ServiceManager;
+  private inputManager!: InputManager;
   
-  // Game state
-  private renderer: Renderer;
-  private config: Config;
-  private stateManager: StateManager;
+  private running: boolean = false;
+  private lastFrameTime: number = 0;
+  private lastUpdateTime: number = 0;
+  private frameCount: number = 0;
+  private updateCount: number = 0;
+  private frameTimer: number = 0;
+  private updateTimer: number = 0;
+  private currentFPS: number = 0;
+  private currentTPS: number = 0;
   
   // Time tracking for render
   private lastRenderTime: number = 0;
@@ -17,19 +33,14 @@ export class Engine {
   private renderAccumulator: number = 0;
   
   // Time tracking for fixed update
-  private lastUpdateTime: number = 0;
   private fixedTimeStep: number = 0;
   private updateAccumulator: number = 0;
   
   // FPS tracking
-  private frameCount: number = 0;
   private fpsUpdateTime: number = 0;
-  private currentFps: number = 0;
   
   // TPS tracking (ticks per second)
-  private tickCount: number = 0;
   private tpsUpdateTime: number = 0;
-  private currentTps: number = 0;
   
   constructor() {
     // Get config instance
@@ -53,7 +64,7 @@ export class Engine {
    * Start the game engine
    */
   async start(): Promise<void> {
-    if (this.isRunning) return;
+    if (this.running) return;
     
     // Load configuration first
     await this.loadConfig();
@@ -67,12 +78,12 @@ export class Engine {
     this.fpsUpdateTime = this.lastRenderTime;
     this.tpsUpdateTime = this.lastRenderTime;
     this.frameCount = 0;
-    this.tickCount = 0;
+    this.updateCount = 0;
     this.renderAccumulator = 0;
     this.updateAccumulator = 0;
     
     // Start the game loop
-    this.isRunning = true;
+    this.running = true;
     
     // Start render loop
     this.renderLoop();
@@ -103,7 +114,7 @@ export class Engine {
    * Stop the game engine
    */
   stop(): void {
-    this.isRunning = false;
+    this.running = false;
     console.log('Fungeon Engine stopped');
   }
   
@@ -118,6 +129,13 @@ export class Engine {
    * Initialize the engine
    */
   private async initialize(): Promise<void> {
+    // Initialize event system and service manager first
+    this.eventSystem = EventSystem.getInstance();
+    this.serviceManager = ServiceManager.getInstance();
+    
+    // Register engine as a service
+    this.serviceManager.register('engine', this);
+    
     // Find the game container
     const container = document.getElementById('game-container');
     if (!container) {
@@ -127,8 +145,20 @@ export class Engine {
     // Initialize the renderer (which now handles UI as well)
     await this.renderer.initialize();
     
+    // Register renderer as a service
+    this.serviceManager.register('renderer', this.renderer);
+    
+    // Initialize input manager
+    this.inputManager = InputManager.getInstance();
+    this.inputManager.initialize(this.renderer.getCanvas());
+    
+    // Register input manager as a service
+    this.serviceManager.register('inputManager', this.inputManager);
+    
     // Load initial state from config
     await this.loadInitialState();
+    
+    console.log('Engine initialization complete');
   }
   
   /**
@@ -153,7 +183,7 @@ export class Engine {
     const updateIntervalMs = this.fixedTimeStep * 1000;
     
     const updateInterval = setInterval(() => {
-      if (!this.isRunning) {
+      if (!this.running) {
         clearInterval(updateInterval);
         return;
       }
@@ -169,7 +199,7 @@ export class Engine {
    */
   private renderLoop(timestamp?: number): void {
     // If engine is stopped, don't continue the loop
-    if (!this.isRunning) return;
+    if (!this.running) return;
     
     // Request next frame immediately to maximize frame rate
     requestAnimationFrame(this.renderLoop.bind(this));
@@ -219,6 +249,9 @@ export class Engine {
    * Update game logic
    */
   private update(deltaTime: number): void {
+    // Update input manager
+    this.inputManager.update();
+    
     // General engine updates that aren't state-specific
     // Later, this will update all game systems
   }
@@ -231,7 +264,7 @@ export class Engine {
     
     // Update FPS every second
     if (currentTime - this.fpsUpdateTime >= 1000) {
-      this.currentFps = this.frameCount;
+      this.currentFPS = this.frameCount;
       this.frameCount = 0;
       this.fpsUpdateTime = currentTime;
     }
@@ -241,12 +274,12 @@ export class Engine {
    * Update TPS counter
    */
   private updateTps(currentTime: number): void {
-    this.tickCount++;
+    this.updateCount++;
     
     // Update TPS every second
     if (currentTime - this.tpsUpdateTime >= 1000) {
-      this.currentTps = this.tickCount;
-      this.tickCount = 0;
+      this.currentTPS = this.updateCount;
+      this.updateCount = 0;
       this.tpsUpdateTime = currentTime;
     }
   }
@@ -262,13 +295,13 @@ export class Engine {
    * Get current FPS
    */
   getFps(): number {
-    return this.currentFps;
+    return this.currentFPS;
   }
   
   /**
    * Get current TPS (ticks per second)
    */
   getTps(): number {
-    return this.currentTps;
+    return this.currentTPS;
   }
 } 

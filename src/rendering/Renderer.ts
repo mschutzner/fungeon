@@ -273,4 +273,15 @@ export class Renderer {
   getHeight(): number {
     return this.height;
   }
+  
+  /**
+   * Get the output canvas
+   * @returns The main output canvas element
+   */
+  getCanvas(): HTMLCanvasElement {
+    if (!this.outputCanvas) {
+      throw new Error('Output canvas is not initialized');
+    }
+    return this.outputCanvas;
+  }
 } 
