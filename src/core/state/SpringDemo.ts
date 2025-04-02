@@ -23,7 +23,7 @@ export class SpringDemo extends ConstraintDemoState {
   
   // Spring constraint parameters
   private springEnabled: boolean = true;
-  private restLength: number = 3.0;
+  private restLength: number = 2.0;
   private stiffness: number = 20;
   private damping: number = 0;
   
@@ -314,7 +314,7 @@ export class SpringDemo extends ConstraintDemoState {
           this.adjustRestLength(0.5);
           break;
         case '3':
-          this.adjustStiffness(-0.1);
+          this.adjustStiffness(-1.0);
           break;
         case '4':
           this.adjustStiffness(1.0);

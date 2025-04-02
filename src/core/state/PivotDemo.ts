@@ -24,9 +24,9 @@ export class PivotDemo extends ConstraintDemoState {
   
   // Pivot constraint parameters
   private angle: number = 0;
-  private radius: number = 3;
-  private pivotAxis: Vector3 = new Vector3(0, 1, 0); // Default to Y-up
-  private pivotAxisEnum: Axis = Axis.POSITIVE_Y; // Default to Y-up
+  private radius: number = 2;
+  private pivotAxis: Vector3 = new Vector3(0, 0, 1); // Default to Y-up
+  private pivotAxisEnum: Axis = Axis.POSITIVE_Z; // Default to Y-up
   private rotationSpeed: number = 45; // Degrees per second
   private autoRotate: boolean = true;
   private pivotEnabled: boolean = true;

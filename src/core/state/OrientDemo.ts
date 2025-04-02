@@ -34,7 +34,7 @@ export class OrientDemo extends ConstraintDemoState {
       engine,
       ConstraintType.ORIENT,
       'The Orient constraint makes an entity match the orientation of another entity.',
-      'WASD/QE: Move target\nArrows: Rotate target\nO: Toggle orient\nM: Decrease mix weight\nN: Increase mix weight\nX/Y/Z: Adjust offset rotation\nESC: Return to Menu'
+      'Arrows: Rotate target\nO: Toggle orient\nM/N: Dec/Incr mix weight\nX/Y/Z: Adjust offset\nESC: Return to Menu'
     );
   }
   
@@ -68,7 +68,7 @@ export class OrientDemo extends ConstraintDemoState {
     const targetEntity = this.world.createEntity('target');
     
     // Add transform component with position
-    targetEntity.addComponent(new Transform(0, 2, 0));
+    targetEntity.addComponent(new Transform(-1, 2, 0));
     
     // Add ThreeObject component
     targetEntity.addComponent(new ThreeObject());
@@ -94,7 +94,7 @@ export class OrientDemo extends ConstraintDemoState {
     const orientedEntity = this.world.createEntity('oriented');
     
     // Add transform component - position away from the target
-    orientedEntity.addComponent(new Transform(3, 2, 3));
+    orientedEntity.addComponent(new Transform(1, 2, 0));
     
     // Add ThreeObject component
     orientedEntity.addComponent(new ThreeObject());
@@ -149,26 +149,6 @@ export class OrientDemo extends ConstraintDemoState {
     // Movement speed
     const moveSpeed = 3 * deltaTime;
     const rotateSpeed = 90 * deltaTime; // Degrees per second
-    
-    // Use WASD + QE for 3D movement
-    if (this.inputManager.isKeyDown('w')) {
-      transform.position.z -= moveSpeed;
-    }
-    if (this.inputManager.isKeyDown('s')) {
-      transform.position.z += moveSpeed;
-    }
-    if (this.inputManager.isKeyDown('a')) {
-      transform.position.x -= moveSpeed;
-    }
-    if (this.inputManager.isKeyDown('d')) {
-      transform.position.x += moveSpeed;
-    }
-    if (this.inputManager.isKeyDown('q')) {
-      transform.position.y += moveSpeed;
-    }
-    if (this.inputManager.isKeyDown('e')) {
-      transform.position.y -= moveSpeed;
-    }
     
     // Use arrow keys for rotation
     if (this.inputManager.isKeyDown('arrowleft')) {

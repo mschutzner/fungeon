@@ -657,7 +657,7 @@ export class ConstraintSystem implements ISystem {
       }
     } else {
       // Clamp to path ends for non-looping paths
-      constraint.currentDistance = THREE.MathUtils.clamp(constraint.currentDistance, 0, totalDistance);
+      constraint.currentDistance = THREE.MathUtils.clamp(constraint.currentDistance, 0, constraint.path.length);
     }
     
     // Find which segment we're on and the interpolation factor
@@ -665,12 +665,12 @@ export class ConstraintSystem implements ISystem {
     const t = constraint.currentDistance - segment;
     
     // Make sure segment is valid
-    const maxSegment = constraint.path.length - 2;
+    const maxSegment = constraint.path.length - 1;
     const safeSegment = THREE.MathUtils.clamp(segment, 0, maxSegment);
     
     // Get the two points to interpolate between
     const p1 = constraint.path[safeSegment];
-    const p2 = constraint.path[safeSegment + 1];
+    const p2 = constraint.path[Math.min(safeSegment + 1, constraint.path.length - 1)];
     
     // Interpolate position (simple linear interpolation for now)
     // A more advanced implementation could use cubic splines

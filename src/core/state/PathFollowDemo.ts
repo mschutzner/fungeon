@@ -11,7 +11,9 @@ import {
   ConstraintComponent,
   ConstraintType,
   Vector3,
-  Rotation
+  Rotation,
+  CameraComponent,
+  CameraType
 } from '../../ecs';
 
 // Define PathPoint interface similar to the one in the ECS
@@ -31,7 +33,7 @@ export class PathFollowDemo extends ConstraintDemoState {
   private pathFollowEnabled: boolean = true;
   private loopPath: boolean = true;
   private alignToPath: boolean = true;
-  private speed: number = 0.5;
+  private speed: number = 1.4;
   
   // Path visualization
   private pathLine: THREE.Line | null = null;
@@ -47,6 +49,37 @@ export class PathFollowDemo extends ConstraintDemoState {
       'The PathFollow constraint makes an entity follow a predefined path at a specified speed.',
       'P: Toggle path following\nL: Toggle loop\nA: Toggle alignment\n+/-: Adjust speed\nESC: Return to Menu'
     );
+  }
+  
+  /**
+   * Create a camera entity with a position that can see the entire path
+   */
+  protected createCamera(): void {
+    if (!this.world || !this.cameraSystem) return;
+    
+    // Get the renderer
+    const renderer = this.engine.getRenderer();
+    if (!renderer) return;
+    
+    // Calculate aspect ratio
+    const aspect = renderer.getWidth() / renderer.getHeight();
+    
+    // Position camera further back to see the entire path
+    const cameraEntity = this.cameraSystem.createCamera(
+      'mainCamera',
+      CameraType.PERSPECTIVE,
+      new THREE.Vector3(0, 2, 8)
+    );
+    
+    // Get the camera component and customize it
+    const cameraComponent = cameraEntity.getComponent(CameraComponent);
+    if (cameraComponent) {
+      cameraComponent.setFov(75);
+      cameraComponent.setAspect(aspect);
+      cameraComponent.setClippingPlanes(0.1, 1000);
+    }
+    
+    console.log('Camera entity created for path follow demo');
   }
   
   /**
@@ -213,11 +246,11 @@ export class PathFollowDemo extends ConstraintDemoState {
           break;
         case '+':
         case '=':
-          this.adjustSpeed(0.1);
+          this.adjustSpeed(0.2);
           break;
         case '-':
         case '_':
-          this.adjustSpeed(-0.1);
+          this.adjustSpeed(-0.2);
           break;
       }
     });
@@ -269,7 +302,7 @@ export class PathFollowDemo extends ConstraintDemoState {
    * Adjust the speed of path following
    */
   private adjustSpeed(delta: number): void {
-    this.speed = Math.max(0.1, Math.min(2.0, this.speed + delta));
+    this.speed = Math.max(0.1, Math.min(3.0, this.speed + delta));
     this.updateConstraint();
     console.log(`Path following speed: ${this.speed.toFixed(1)}`);
   }
