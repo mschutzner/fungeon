@@ -10,6 +10,17 @@ interface ConfigData {
   maxFPS: number;
   debug: boolean;
   startState: string;
+  fonts: {
+    [key: string]: {
+      url: string;
+      charWidth: number;
+      charHeight: number;
+      leading?: number; // Default leading (line spacing) for this font
+      customWidths?: {
+        [key: string]: number; // Single character string -> custom width
+      };
+    };
+  };
   // Add more configuration properties as needed
 }
 
@@ -24,7 +35,35 @@ const DEFAULT_CONFIG: ConfigData = {
   tickRate: 0.1, // 100ms per tick (10 updates per second)
   maxFPS: 60,    // 60 frames per second rendering
   debug: true,
-  startState: 'TestState'
+  startState: 'TestState',
+  fonts: {
+    vga: {
+      url: './assets/ascii/vga8x12.png',
+      charWidth: 8,
+      charHeight: 12
+    },
+    tiny: {
+      url: './assets/ascii/tiny6x6.png',
+      charWidth: 6,
+      charHeight: 6,
+      leading: 1
+    },
+    medium: {
+      url: './assets/ascii/medium6x10.png',
+      charWidth: 6,
+      charHeight: 10,
+      customWidths: {
+        " ": 3,
+        '!': 3,
+        '"': 5,
+        "'": 3,
+        ',': 3,
+        '.': 3,
+        ':': 3,
+        ';': 4,
+      }
+    }
+  }
 };
 
 /**

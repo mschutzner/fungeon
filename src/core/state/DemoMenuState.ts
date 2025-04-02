@@ -233,15 +233,14 @@ export class DemoMenuState extends State {
     // Instructions
     const instructions = new TextBox(
       22,
-      24,
+      20,
       180,
       20, // Smaller height for tiny font
-      'Use arrow keys to navigate and Enter to select',
-      'tiny', // Use tiny font instead of vga
+      'Use arrow keys to navigate and Enter to select.',
+      'medium', // Use tiny font instead of vga
       1,
       '#8080ff',
       'center',
-      2,
     );
     uiSystem.addElement(instructions);
     

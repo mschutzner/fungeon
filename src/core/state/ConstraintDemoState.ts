@@ -384,7 +384,6 @@ export abstract class ConstraintDemoState extends State {
       1,
       '#ffffff',
       'center',
-      1
     );
     uiSystem.addElement(this.descriptionText);
     
@@ -396,7 +395,7 @@ export abstract class ConstraintDemoState extends State {
       216,
       80,
       instructions,
-      'vga',
+      'medium',
       1,
       '#ccffcc',
       'center'

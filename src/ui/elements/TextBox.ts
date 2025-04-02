@@ -1,5 +1,6 @@
 import { UIElement } from './UIElement';
 import { UISystem, FontInfo } from '../UISystem';
+import { getFontIndex } from '../font/CharCodeMap';
 
 /**
  * TextBox UI Element
@@ -8,12 +9,11 @@ import { UISystem, FontInfo } from '../UISystem';
 export class TextBox extends UIElement {
   // Text properties
   private text: string;
-  private lines: string[] = [];
   private fontName: string;
   private scale: number;
   private color: string;
   private alignment: 'left' | 'center' | 'right';
-  private leading: number = 0; // Additional pixels between lines, default 0
+  private leading?: number; // Make leading optional
   
   // Box properties
   private backgroundColor: string;
@@ -30,6 +30,9 @@ export class TextBox extends UIElement {
   private colorCanvas: HTMLCanvasElement;
   private colorCtx: CanvasRenderingContext2D | null;
   
+  // Add back lines property
+  private lines: string[] = [];
+  
   /**
    * Create a new TextBox
    * @param x X position in pixels
@@ -41,6 +44,7 @@ export class TextBox extends UIElement {
    * @param scale Integer scale factor (1, 2, 3, etc.)
    * @param color Text color (default: white)
    * @param alignment Text alignment (default: left)
+   * @param leading Optional leading override (default: use font's default leading)
    */
   constructor(
     x: number, 
@@ -52,7 +56,7 @@ export class TextBox extends UIElement {
     scale: number = 1,
     color: string = '#FFFFFF',
     alignment: 'left' | 'center' | 'right' = 'left',
-    leading: number = 0
+    leading?: number
   ) {
     super(x, y, width, height);
     
@@ -61,7 +65,7 @@ export class TextBox extends UIElement {
     this.scale = Math.max(1, Math.floor(scale));
     this.color = color;
     this.alignment = alignment;
-    this.leading = leading;
+    this.leading = leading; // Store the leading value
     
     this.backgroundColor = 'transparent';
     this.borderColor = 'transparent';
@@ -112,10 +116,10 @@ export class TextBox extends UIElement {
   
   /**
    * Set line spacing (leading)
-   * @param leading Additional pixels between lines
+   * @param leading Additional pixels between lines, or undefined to use font default
    */
-  setLeading(leading: number): void {
-    this.leading = Math.max(0, leading);
+  setLeading(leading?: number): void {
+    this.leading = leading;
   }
   
   /**
@@ -146,53 +150,56 @@ export class TextBox extends UIElement {
   private splitTextIntoLines(ui: UISystem): void {
     // Calculate available width
     const contentWidth = this.width - (this.padding * 2) - (this.borderWidth * 2);
-    const charWidth = ui.getCharWidth(this.fontName, this.scale);
-    const maxCharsPerLine = Math.floor(contentWidth / charWidth);
     
-    if (maxCharsPerLine <= 0) {
+    // Get font info
+    const fontInfo = ui.getFontInfo(this.fontName);
+    if (!fontInfo) {
       this.lines = [];
       return;
     }
     
-    // Handle explicit newlines first
-    const textParagraphs = this.text.split('\n');
+    // First split by newlines
+    const paragraphs = this.text.split('\n');
     this.lines = [];
     
-    // Process each paragraph
-    for (const paragraph of textParagraphs) {
-      // If paragraph is empty, add an empty line
-      if (paragraph.length === 0) {
-        this.lines.push('');
-        continue;
-      }
-      
-      // Split text into words
+    for (const paragraph of paragraphs) {
+      // Calculate max chars per line based on character widths
+      let currentLineWidth = 0;
+      let maxLineWidth = 0;
       const words = paragraph.split(' ');
       let currentLine = '';
       
       for (const word of words) {
-        // Check if adding this word would exceed the max width
-        const testLine = currentLine.length === 0 ? word : currentLine + ' ' + word;
-        if (testLine.length <= maxCharsPerLine) {
-          currentLine = testLine;
-        } else {
-          // Push current line and start a new one
+        // Calculate word width
+        let wordWidth = 0;
+        for (let i = 0; i < word.length; i++) {
+          const charCode = word.charCodeAt(i);
+          wordWidth += ui.getCharWidth(this.fontName, charCode, this.scale);
+        }
+        
+        // Add space width if not first word
+        if (currentLine.length > 0) {
+          wordWidth += ui.getCharWidth(this.fontName, 0x0020, this.scale); // Space character
+        }
+        
+        // Check if word fits
+        if (currentLineWidth + wordWidth <= contentWidth) {
+          // Add word to current line
           if (currentLine.length > 0) {
-            this.lines.push(currentLine);
-          }
-          
-          // If the word itself is longer than the max chars, we need to break it
-          if (word.length > maxCharsPerLine) {
-            let remainingWord = word;
-            while (remainingWord.length > 0) {
-              const chunk = remainingWord.substring(0, maxCharsPerLine);
-              this.lines.push(chunk);
-              remainingWord = remainingWord.substring(maxCharsPerLine);
-            }
-            currentLine = '';
+            currentLine += ' ' + word;
           } else {
             currentLine = word;
           }
+          currentLineWidth += wordWidth;
+          maxLineWidth = Math.max(maxLineWidth, currentLineWidth);
+        } else {
+          // Start new line
+          if (currentLine.length > 0) {
+            this.lines.push(currentLine);
+          }
+          currentLine = word;
+          currentLineWidth = wordWidth;
+          maxLineWidth = Math.max(maxLineWidth, currentLineWidth);
         }
       }
       
@@ -202,15 +209,13 @@ export class TextBox extends UIElement {
       }
     }
     
-    // Calculate max scroll and visible lines
-    const fontInfo = ui.getFontInfo(this.fontName);
-    if (fontInfo) {
-      const baseLineHeight = fontInfo.charHeight * this.scale;
-      const lineHeight = baseLineHeight + this.leading;
-      const contentHeight = this.height - (this.padding * 2) - (this.borderWidth * 2);
-      this.visibleLines = Math.floor(contentHeight / lineHeight);
-      this.maxScrollY = Math.max(0, this.lines.length - this.visibleLines);
-    }
+    // Calculate max scroll and visible lines using font's leading if not overridden
+    const baseLineHeight = fontInfo.charHeight * this.scale;
+    const effectiveLeading = this.leading ?? fontInfo.leading ?? 0;
+    const lineHeight = baseLineHeight + effectiveLeading;
+    const contentHeight = this.height - (this.padding * 2) - (this.borderWidth * 2);
+    this.visibleLines = Math.floor(contentHeight / lineHeight);
+    this.maxScrollY = Math.max(0, this.lines.length - this.visibleLines);
   }
   
   /**
@@ -274,6 +279,9 @@ export class TextBox extends UIElement {
     const fontInfo = ui.getFontInfo(this.fontName);
     if (!fontInfo || !this.colorCtx) return;
     
+    // Use font's default leading if not specified
+    const effectiveLeading = this.leading ?? fontInfo.leading ?? 0;
+    
     // Setup clipping region to prevent drawing outside the text box
     ctx.save();
     ctx.beginPath();
@@ -287,7 +295,7 @@ export class TextBox extends UIElement {
     
     // Get line height from the font
     const baseLineHeight = fontInfo.charHeight * this.scale;
-    const lineHeight = baseLineHeight + this.leading;
+    const lineHeight = baseLineHeight + effectiveLeading;
     const contentX = x + this.padding + this.borderWidth;
     const contentY = y + this.padding + this.borderWidth;
     
@@ -302,8 +310,14 @@ export class TextBox extends UIElement {
       
       let lineX = contentX;
       
+      // Calculate total line width using custom character widths
+      let lineWidth = 0;
+      for (let j = 0; j < line.length; j++) {
+        const charCode = line.charCodeAt(j);
+        lineWidth += ui.getCharWidth(this.fontName, charCode, this.scale);
+      }
+      
       // Adjust position based on alignment
-      const lineWidth = line.length * fontInfo.charWidth * this.scale;
       if (this.alignment === 'center') {
         lineX = x + (this.width / 2) - (lineWidth / 2);
       } else if (this.alignment === 'right') {
@@ -343,40 +357,40 @@ export class TextBox extends UIElement {
     const scale = Math.max(1, Math.floor(this.scale));
     
     // Get character dimensions
-    const singleCharWidth = fontInfo.charWidth;
     const singleCharHeight = fontInfo.charHeight;
     
     // Resize color canvas to fit one character
-    this.colorCanvas.width = singleCharWidth;
     this.colorCanvas.height = singleCharHeight;
     
     // For each character in the text
+    let currentX = x;
     for (let i = 0; i < text.length; i++) {
       const charCode = text.charCodeAt(i);
+      const fontIndex = getFontIndex(charCode);
+      
+      // Get character width
+      const charWidth = fontInfo.customWidths?.get(charCode) ?? fontInfo.charWidth;
+      this.colorCanvas.width = charWidth;
       
       // Get the source position in the font atlas
-      const sourceX = (charCode % fontInfo.charsPerRow) * singleCharWidth;
-      const sourceY = Math.floor(charCode / fontInfo.charsPerRow) * singleCharHeight;
-      
-      // Calculate destination position
-      const destX = x + (i * singleCharWidth * scale);
-      const destY = y;
+      const sourceX = (fontIndex % fontInfo.charsPerRow) * fontInfo.charWidth;
+      const sourceY = Math.floor(fontIndex / fontInfo.charsPerRow) * singleCharHeight;
       
       // Clear the color canvas
-      this.colorCtx.clearRect(0, 0, singleCharWidth, singleCharHeight);
+      this.colorCtx.clearRect(0, 0, charWidth, singleCharHeight);
       
       // Fill with the text color
       this.colorCtx.fillStyle = this.color;
-      this.colorCtx.fillRect(0, 0, singleCharWidth, singleCharHeight);
+      this.colorCtx.fillRect(0, 0, charWidth, singleCharHeight);
       
       // Set composite operation to use the font as a mask
       this.colorCtx.globalCompositeOperation = 'destination-in';
       
-      // Draw the character from the font atlas as a mask
+      // Draw the character from the font atlas as a mask, sampling only the custom width
       this.colorCtx.drawImage(
         fontInfo.canvas,
-        sourceX, sourceY, singleCharWidth, singleCharHeight,
-        0, 0, singleCharWidth, singleCharHeight
+        sourceX, sourceY, charWidth, singleCharHeight,
+        0, 0, charWidth, singleCharHeight
       );
       
       // Reset composite operation for next iteration
@@ -386,9 +400,12 @@ export class TextBox extends UIElement {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
         this.colorCanvas,
-        0, 0, singleCharWidth, singleCharHeight,
-        destX, destY, singleCharWidth * scale, singleCharHeight * scale
+        0, 0, charWidth, singleCharHeight,
+        currentX, y, charWidth * scale, singleCharHeight * scale
       );
+      
+      // Move to next character position
+      currentX += charWidth * scale;
     }
   }
 } 

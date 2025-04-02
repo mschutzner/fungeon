@@ -10,6 +10,8 @@ export interface FontInfo {
   charsPerRow: number;
   rows: number;
   canvas: HTMLCanvasElement;
+  customWidths?: Map<number, number>; // Maps character codes to custom widths
+  leading?: number;
 }
 
 /**
@@ -52,11 +54,17 @@ export class UISystem {
    */
   private async loadFonts(): Promise<void> {
     try {
-      // VGA font (8x12)
-      await this.loadFont('vga', './assets/ascii/vga8x12.png', 8, 12);
+      const config = Config.getInstance();
       
-      // Tiny font (6x6)
-      await this.loadFont('tiny', './assets/ascii/tiny6x6.png', 6, 6);
+      // Load each font defined in the config
+      for (const [name, fontConfig] of Object.entries(config.config.fonts)) {
+        await this.loadFont(
+          name,
+          fontConfig.url,
+          fontConfig.charWidth,
+          fontConfig.charHeight
+        );
+      }
       
       console.log('All fonts loaded successfully');
     } catch (error) {
@@ -89,16 +97,23 @@ export class UISystem {
         }
         ctx.drawImage(img, 0, 0);
         
-        // Debug: check if font image has data
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        let hasData = false;
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          if (imageData.data[i + 3] > 0) {
-            hasData = true;
-            break;
+        // Get font config
+        const config = Config.getInstance();
+        const fontConfig = config.config.fonts[name];
+        
+        // Create custom widths map if specified
+        let customWidths: Map<number, number> | undefined;
+        if (fontConfig.customWidths) {
+          customWidths = new Map();
+          for (const [char, width] of Object.entries(fontConfig.customWidths)) {
+            if (char.length !== 1) {
+              console.warn(`Invalid custom width key: "${char}". Must be a single character.`);
+              continue;
+            }
+            const charCode = char.charCodeAt(0);
+            customWidths.set(charCode, width);
           }
         }
-        console.log(`Font ${name} has visible pixels: ${hasData}`);
         
         // Store the font info
         this.fontInfo.set(name, {
@@ -106,7 +121,9 @@ export class UISystem {
           charHeight,
           charsPerRow,
           rows,
-          canvas
+          canvas,
+          customWidths,
+          leading: fontConfig.leading || 0
         });
         
         console.log(`Font ${name} loaded successfully: ${img.width}x${img.height}, ${charWidth}x${charHeight} chars, ${charsPerRow} chars per row, ${rows} rows`);
@@ -192,9 +209,18 @@ export class UISystem {
   /**
    * Get font character width
    */
-  getCharWidth(fontName: string, scale: number = 1): number {
+  getCharWidth(fontName: string, charCode: number = 0, scale: number = 1): number {
     const info = this.fontInfo.get(fontName);
-    return info ? info.charWidth * scale : 0;
+    if (!info) return 0;
+    
+    // Check for custom width first
+    const customWidth = info.customWidths?.get(charCode);
+    if (customWidth !== undefined) {
+      return customWidth * scale;
+    }
+    
+    // Use default width if no custom width defined
+    return info.charWidth * scale;
   }
   
   /**
