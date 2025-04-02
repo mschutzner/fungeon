@@ -1,6 +1,18 @@
 import { State } from './State';
 import { Renderer } from '../../rendering/Renderer';
 import { TestState } from './TestState';
+import { DemoMenuState } from './DemoMenuState';
+import { TrackToDemo } from './TrackToDemo';
+import { LookAtDemo } from './LookAtDemo';
+import { CopyTransformDemo } from './CopyTransformDemo';
+import { DistanceDemo } from './DistanceDemo';
+import { LimitDemo } from './LimitDemo';
+import { LockDemo } from './LockDemo';
+import { PathFollowDemo } from './PathFollowDemo';
+import { OrientDemo } from './OrientDemo';
+import { PivotDemo } from './PivotDemo';
+import { SpringDemo } from './SpringDemo';
+import { FloorDemo } from './FloorDemo';
 import { Engine } from '../Engine';
 
 /**
@@ -18,6 +30,21 @@ export class StateManager {
   constructor() {
     // Register available states
     this.registerStateType('TestState', TestState);
+    this.registerStateType('demoMenu', DemoMenuState);
+    this.registerStateType('trackToDemo', TrackToDemo);
+    this.registerStateType('lookAtDemo', LookAtDemo);
+    this.registerStateType('copyTransformDemo', CopyTransformDemo);
+    this.registerStateType('distanceDemo', DistanceDemo);
+    this.registerStateType('limitDemo', LimitDemo);
+    this.registerStateType('lockDemo', LockDemo);
+    this.registerStateType('pathFollowDemo', PathFollowDemo);
+    this.registerStateType('orientDemo', OrientDemo);
+    this.registerStateType('pivotDemo', PivotDemo);
+    this.registerStateType('springDemo', SpringDemo);
+    this.registerStateType('floorDemo', FloorDemo);
+    
+    // Register other constraint demos here when they're implemented
+    // Only IK demo remains to be implemented
   }
   
   /**
@@ -107,6 +134,15 @@ export class StateManager {
     // Exit current state if it exists
     if (this.currentState) {
       await this.currentState.exit();
+    }
+    
+    // Clear UI and WebGL canvases
+    if (this.renderer) {
+      // Clear UI canvas
+      this.renderer.clearUI();
+      
+      // Clear WebGL canvas (Three.js scene)
+      this.renderer.clear();
     }
     
     // Enter new state

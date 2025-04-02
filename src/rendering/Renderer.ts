@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { Config } from '../core/Config';
 import { UISystem } from '../ui/UISystem';
+import { World } from '../ecs/World';
+import { CameraSystem } from '../ecs/systems/CameraSystem';
+import { CameraComponent, CameraType } from '../ecs/components/CameraComponent';
 
 export class Renderer {
   // Main output canvas
@@ -13,7 +16,7 @@ export class Renderer {
   private uiContext: CanvasRenderingContext2D | null = null;
   
   // Three.js objects
-  private camera: THREE.PerspectiveCamera;
+  private defaultCamera: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer; // Using definite assignment assertion
   
   // UI System
@@ -21,6 +24,10 @@ export class Renderer {
   
   // Active scene
   private activeScene: THREE.Scene | null = null;
+  
+  // ECS reference
+  private world: World | null = null;
+  private cameraSystem: CameraSystem | null = null;
   
   // Configuration
   private width: number;
@@ -33,14 +40,14 @@ export class Renderer {
     this.width = config.resolution.width;
     this.height = config.resolution.height;
     
-    // Create camera
-    this.camera = new THREE.PerspectiveCamera(
+    // Create default camera (used if no ECS camera is available)
+    this.defaultCamera = new THREE.PerspectiveCamera(
       75, // FOV
       this.width / this.height, // Aspect ratio
       0.1, // Near plane
       1000 // Far plane
     );
-    this.camera.position.z = 5;
+    this.defaultCamera.position.z = 5;
   }
   
   /**
@@ -158,6 +165,28 @@ export class Renderer {
   }
   
   /**
+   * Set the ECS world
+   * @param world The ECS world
+   */
+  setWorld(world: World): void {
+    this.world = world;
+    
+    // Try to get the camera system
+    this.cameraSystem = world.getSystem(CameraSystem);
+    
+    // If no camera system exists, create and register one
+    if (!this.cameraSystem) {
+      this.cameraSystem = new CameraSystem();
+      world.registerSystem(this.cameraSystem);
+    }
+    
+    // If the world has a scene, set it as active
+    if (world.hasScene()) {
+      this.setActiveScene(world.getScene());
+    }
+  }
+  
+  /**
    * Set the active scene to render
    */
   setActiveScene(scene: THREE.Scene): void {
@@ -181,9 +210,12 @@ export class Renderer {
       this.uiSystem.update(deltaTime);
     }
     
+    // Get the camera to use for rendering
+    const camera = this.getActiveCamera();
+    
     // Render the WebGL scene to offscreen canvas if it exists
     if (this.activeScene && this.renderer) {
-      this.renderer.render(this.activeScene, this.camera);
+      this.renderer.render(this.activeScene, camera);
     }
     
     // Render UI to offscreen canvas if UI system exists
@@ -193,6 +225,42 @@ export class Renderer {
     
     // Composite the two canvases onto the output canvas
     this.compositeCanvases();
+  }
+  
+  /**
+   * Get the active camera for rendering
+   * @returns The camera to use for rendering
+   */
+  private getActiveCamera(): THREE.Camera {
+    // If we have a camera system and it has an active camera, use that
+    if (this.cameraSystem) {
+      const activeCamera = this.cameraSystem.getActiveCamera();
+      if (activeCamera) {
+        return activeCamera.getCamera();
+      }
+    }
+    
+    // Otherwise use the default camera
+    return this.defaultCamera;
+  }
+  
+  /**
+   * Create a default camera in the ECS world
+   * @param setActive Whether to set this camera as active
+   * @returns The created camera entity
+   */
+  createDefaultCamera(setActive: boolean = true): any {
+    if (!this.world || !this.cameraSystem) {
+      throw new Error('Cannot create camera - no ECS world set');
+    }
+    
+    return this.cameraSystem.createCamera(
+      'MainCamera',
+      CameraType.PERSPECTIVE,
+      new THREE.Vector3(0, 0, 5),
+      new THREE.Euler(0, 0, 0),
+      setActive
+    );
   }
   
   /**
@@ -219,11 +287,28 @@ export class Renderer {
    * Handle window resize
    */
   resize(): void {
-    // Update camera aspect ratio
+    // Update configuration
+    const config = Config.getInstance();
+    this.width = config.resolution.width;
+    this.height = config.resolution.height;
+    
+    // Update default camera aspect ratio
     const newAspect = this.width / this.height;
-    if (this.camera.aspect !== newAspect) {
-      this.camera.aspect = newAspect;
-      this.camera.updateProjectionMatrix();
+    if (this.defaultCamera.aspect !== newAspect) {
+      this.defaultCamera.aspect = newAspect;
+      this.defaultCamera.updateProjectionMatrix();
+    }
+    
+    // Update ECS cameras if available
+    if (this.world && this.cameraSystem) {
+      const CameraComponentClass = CameraComponent as unknown as any;
+      const cameras = this.world.query(CameraComponentClass);
+      cameras.forEach(entity => {
+        const camera = entity.getComponent(CameraComponent);
+        if (camera) {
+          camera.setAspect(newAspect);
+        }
+      });
     }
     
     // Resize WebGL renderer
@@ -254,10 +339,12 @@ export class Renderer {
   }
   
   /**
-   * Get the camera
+   * Get the current camera
+   * @returns The active camera or the default camera
+   * @deprecated Use getActiveCamera() instead
    */
-  getCamera(): THREE.PerspectiveCamera {
-    return this.camera;
+  getCamera(): THREE.Camera {
+    return this.getActiveCamera();
   }
   
   /**
@@ -280,8 +367,56 @@ export class Renderer {
    */
   getCanvas(): HTMLCanvasElement {
     if (!this.outputCanvas) {
-      throw new Error('Output canvas is not initialized');
+      throw new Error('Output canvas not initialized');
     }
     return this.outputCanvas;
+  }
+  
+  /**
+   * Clear the UI canvas
+   */
+  clearUI(): void {
+    if (this.uiCanvas && this.uiContext) {
+      // Clear the UI canvas
+      this.uiContext.clearRect(0, 0, this.width, this.height);
+      
+      // Reset the UI system if it exists
+      if (this.uiSystem) {
+        this.uiSystem.removeAllElements();
+      }
+      
+      console.log('UI canvas cleared');
+    }
+  }
+  
+  /**
+   * Clear the WebGL canvas
+   */
+  clear(): void {
+    if (this.renderer && this.webglCanvas) {
+      // Clear WebGL renderer
+      this.renderer.clear();
+      
+      // Clear the active scene
+      if (this.activeScene) {
+        // Remove all objects except the camera and lights
+        const objectsToRemove: THREE.Object3D[] = [];
+        this.activeScene.traverse((object) => {
+          // Keep cameras and lights
+          if (!(object instanceof THREE.Camera) && 
+              !(object instanceof THREE.Light) &&
+              !(object instanceof THREE.Scene)) {
+            objectsToRemove.push(object);
+          }
+        });
+        
+        // Remove objects from the scene
+        for (const object of objectsToRemove) {
+          this.activeScene.remove(object);
+        }
+      }
+      
+      console.log('WebGL canvas cleared');
+    }
   }
 } 

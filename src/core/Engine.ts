@@ -292,6 +292,13 @@ export class Engine {
   }
   
   /**
+   * Get the state manager
+   */
+  getStateManager(): StateManager {
+    return this.stateManager;
+  }
+  
+  /**
    * Get current FPS
    */
   getFps(): number {

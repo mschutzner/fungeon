@@ -81,7 +81,6 @@ export class UISystem {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
-        console.log(img.width, img.height);
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
