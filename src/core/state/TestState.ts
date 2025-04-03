@@ -7,6 +7,7 @@ import { Engine } from '../Engine';
 import { InputManager } from '../input/InputManager';
 import { EventSystem } from '../events/EventSystem';
 import { InputEventType } from '../input/InputManager';
+import { AssetManager, AssetType } from '../AssetManager';
 // Import ECS components
 import { 
   World, 
@@ -27,7 +28,9 @@ import {
   Rotation,
   Vector3,
   ConstraintType,
-  Axis
+  Axis,
+  Component,
+  IEntity
 } from '../../ecs';
 
 /**
@@ -58,6 +61,9 @@ export class TestState extends State {
   // ECS World
   private world: World | null = null;
   
+  // Asset manager
+  private assetManager: AssetManager | null = null;
+  
   // ECS Entity IDs
   private cubeEntityId: number = -1;
   private cameraEntityId: number = -1;
@@ -77,13 +83,21 @@ export class TestState extends State {
   }
   
   /**
-   * Set up the test state
+   * Initialize the state
    */
   async enter(): Promise<void> {
     console.log('Entering test state');
     
-    // Initialize ECS World - World now creates its own scene
+    // Unsubscribe from any previous events
+    this.unsubscribeFromEvents();
+    
+    // Initialize ECS World
     this.initializeEcsWorld();
+    
+    // Initialize the asset manager with the world
+    if (this.world) {
+      this.assetManager = new AssetManager(this.world);
+    }
     
     // Get the scene from the world
     if (this.world) {
@@ -102,6 +116,9 @@ export class TestState extends State {
     
     // Create a tracker entity that will follow the cube
     this.createTrackerEntity();
+    
+    // Create chest entity
+    await this.createChestEntity();
     
     // Subscribe to mouse events
     this.subscribeToEvents();
@@ -246,7 +263,8 @@ export class TestState extends State {
     // Get the camera component and customize it
     const cameraComponent = cameraEntity.getComponent(CameraComponent);
     if (cameraComponent) {
-      cameraComponent.setFov(75);
+      // Set orthographic camera size (controls how much of the scene is visible)
+      cameraComponent.setSize(10);
       cameraComponent.setAspect(aspect);
       cameraComponent.setClippingPlanes(0.1, 1000);
     }
@@ -262,10 +280,10 @@ export class TestState extends State {
       console.log('Camera tracking constraint added with simplified setup');
     }
     
-    // Store the entity ID for later reference
+    // Store the camera entity ID
     this.cameraEntityId = cameraEntity.id;
     
-    console.log('Camera entity created with ID:', this.cameraEntityId);
+    console.log('Orthographic camera entity created with ID:', this.cameraEntityId);
   }
   
   /**
@@ -305,7 +323,7 @@ export class TestState extends State {
       // Make the POSITIVE_Y axis (green) point at the target
       constraintComponent.addTrackTo(this.cubeEntityId, {
         trackAxis: Axis.POSITIVE_Z,
-        influence: 0.5,
+        influence: 1.0,
       });
       
       trackerEntity.addComponent(constraintComponent);
@@ -319,34 +337,205 @@ export class TestState extends State {
   }
   
   /**
+   * Create a chest entity using the GLTF model
+   */
+  private async createChestEntity(): Promise<void> {
+    if (!this.world || !this.assetManager) return;
+    
+    // Update UI to show we're loading a model
+    if (this.statusText) {
+      this.statusText.setText('Loading chest model...');
+    }
+    
+    try {
+      // Create a new entity for the chest
+      const chestEntity = this.world.createEntity('chest');
+      
+      // Add transform component at position [0,-1,0]
+      const transform = new Transform(0, -1, 0);
+      
+      chestEntity.addComponent(transform);
+      
+      // Add ThreeObject component first
+      chestEntity.addComponent(new ThreeObject());
+      
+      // Add mesh component for the model
+      const meshComponent = new MeshComponent(GeometryType.MODEL);
+      meshComponent.wireframe = true;
+      meshComponent.color = 0x00ffff; // Cyan
+      chestEntity.addComponent(meshComponent);
+      
+      // Load the actual model geometry
+      const modelObject = await this.loadTestModel('chest.gltf');
+      
+      if (modelObject) {
+        // Connect the model with our entity
+        const threeObject = chestEntity.getComponent(ThreeObject);
+        if (threeObject) {
+          // Apply the model's geometry
+          threeObject.setObject(modelObject);
+        }
+        
+        console.log('Chest entity created as ECS entity');
+      }
+      
+      // Update status text
+      if (this.statusText) {
+        this.statusText.setText('Chest model loaded');
+      }
+    } catch (error) {
+      console.error('Error creating chest entity:', error);
+      
+      // Update status text
+      if (this.statusText) {
+        this.statusText.setText('Error loading chest model');
+      }
+    }
+  }
+  
+  /**
    * Log ECS status to console
    */
   private logEcsStatus(): void {
     if (!this.world) return;
     
-    // Get the cube entity and its transform
-    const cubeEntity = this.world.getEntity(this.cubeEntityId);
-    if (cubeEntity) {
-      const transform = cubeEntity.getComponent(Transform);
-      console.log('Cube entity transform:', transform?.position);
-    }
+    console.log("\n┌───────── ECS WORLD STATE ─────────┐");
     
-    // Get the camera entity and its components
-    const cameraEntity = this.world.getEntity(this.cameraEntityId);
-    if (cameraEntity) {
-      const transform = cameraEntity.getComponent(Transform);
-      const camera = cameraEntity.getComponent(CameraComponent);
-      console.log('Camera position:', transform?.position);
-      console.log('Camera type:', camera?.getType());
-    }
+    // Get all entities
+    const entities = this.world.getAllEntities();
+    console.log(`│ Total Entities: ${entities.length}`);
     
-    // Get the serialization system
+    // Track already processed entities to avoid duplicates
+    const processedIds = new Set<number>();
+    
+    // First process entities without parents
+    entities.forEach(entity => {
+      if (processedIds.has(entity.id)) return;
+      
+      // Check if entity has a ThreeObject with a parent
+      const threeObj = entity.getComponent(ThreeObject);
+      if (threeObj && threeObj.object.parent && 
+          threeObj.object.parent.userData && 
+          threeObj.object.parent.userData.entityId) {
+        // This entity has a parent, will be processed in hierarchy
+        return;
+      }
+      
+      // Print entity as root
+      this.logEntityHierarchy(entity, processedIds, 0);
+    });
+    
+    // Print serialization info if available
     const serializationSystem = this.world.getSystem(SerializationSystem);
     if (serializationSystem) {
-      // Serialize the world and log it
-      const worldJson = serializationSystem.saveWorld();
-      console.log('ECS World serialized:', worldJson);
+      console.log("└─────────────────────────────────────┘");
     }
+  }
+  
+  /**
+   * Log an entity and its hierarchy
+   * @param entity The entity to log
+   * @param processedIds Set of already processed entity IDs
+   * @param depth Current depth for indentation
+   */
+  private logEntityHierarchy(entity: IEntity, processedIds: Set<number>, depth: number): void {
+    if (processedIds.has(entity.id)) return;
+    processedIds.add(entity.id);
+    
+    // Create indent based on depth
+    const indent = "│ " + "  ".repeat(depth);
+    const prefix = depth === 0 ? "├─" : "├─";
+    
+    // Get entity details
+    const name = entity.name || `Entity_${entity.id}`;
+    console.log(`${indent}${prefix} ${name} (ID: ${entity.id})`);
+    
+    // Log components
+    const components = entity.getAllComponents();
+    components.forEach((component: Component, index: number) => {
+      const isLast = index === components.length - 1;
+      const compPrefix = isLast ? "└─" : "├─";
+      
+      if (component instanceof Transform) {
+        // Format transform data
+        const transform = component as Transform;
+        const pos = transform.position;
+        const rot = transform.rotation;
+        const scale = transform.scale;
+        
+        console.log(`${indent}│  ${compPrefix} Transform:`);
+        console.log(`${indent}│     ├─ Position: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`);
+        console.log(`${indent}│     ├─ Rotation: x=${rot.x.toFixed(2)}°, y=${rot.y.toFixed(2)}°, z=${rot.z.toFixed(2)}°`);
+        console.log(`${indent}│     └─ Scale: x=${scale.x.toFixed(2)}, y=${scale.y.toFixed(2)}, z=${scale.z.toFixed(2)}`);
+      } 
+      else if (component instanceof CameraComponent) {
+        // Format camera data
+        const camera = component as CameraComponent;
+        console.log(`${indent}│  ${compPrefix} Camera:`);
+        console.log(`${indent}│     ├─ Type: ${camera.getType()}`);
+        console.log(`${indent}│     └─ Active: ${camera.getIsActive()}`);
+      }
+      else if (component instanceof MeshComponent) {
+        // Format mesh data
+        const mesh = component as MeshComponent;
+        console.log(`${indent}│  ${compPrefix} Mesh:`);
+        console.log(`${indent}│     ├─ Type: ${mesh.geometryType}`);
+        console.log(`${indent}│     ├─ Wireframe: ${mesh.wireframe}`);
+        console.log(`${indent}│     └─ Color: 0x${mesh.color.toString(16).padStart(6, '0')}`);
+      }
+      else if (component instanceof ConstraintComponent) {
+        // Format constraint data
+        const constraints = (component as ConstraintComponent).getConstraints();
+        console.log(`${indent}│  ${compPrefix} Constraints: ${constraints.length}`);
+        
+        constraints.forEach((constraint, i) => {
+          const isLastConstraint = i === constraints.length - 1;
+          const constraintPrefix = isLastConstraint ? "└─" : "├─";
+          console.log(`${indent}│     ${constraintPrefix} ${constraint.type} (enabled: ${constraint.enabled})`);
+        });
+      } 
+      else if (component instanceof ThreeObject) {
+        console.log(`${indent}│  ${compPrefix} ThreeObject: ${(component as ThreeObject).object.type}`);
+      }
+      else {
+        // Generic component
+        console.log(`${indent}│  ${compPrefix} ${component.constructor.name}`);
+      }
+    });
+    
+    // Find and log children
+    const childEntities = this.findChildEntities(entity);
+    if (childEntities.length > 0) {
+      childEntities.forEach((childEntity, index) => {
+        this.logEntityHierarchy(childEntity, processedIds, depth + 1);
+      });
+    }
+  }
+  
+  /**
+   * Find child entities of a given entity
+   * @param parentEntity The parent entity
+   * @returns Array of child entities
+   */
+  private findChildEntities(parentEntity: IEntity): IEntity[] {
+    if (!this.world) return [];
+    
+    const children: IEntity[] = [];
+    const entities = this.world.getAllEntities();
+    
+    entities.forEach(entity => {
+      const threeObj = entity.getComponent(ThreeObject);
+      if (threeObj && threeObj.object.parent) {
+        // Check if this entity's ThreeObject parent belongs to the parent entity
+        const parentThreeObj = parentEntity.getComponent(ThreeObject);
+        
+        if (parentThreeObj && threeObj.object.parent === parentThreeObj.object) {
+          children.push(entity);
+        }
+      }
+    });
+    
+    return children;
   }
   
   /**
@@ -363,6 +552,12 @@ export class TestState extends State {
     if (this.world) {
       this.world.clear();
       this.world = null;
+    }
+    
+    // Clear asset manager
+    if (this.assetManager) {
+      this.assetManager.clearCache();
+      this.assetManager = null;
     }
     
     this.scene = null;
@@ -845,5 +1040,46 @@ export class TestState extends State {
     uiSystem.addElement(this.mousePositionText);
     
     console.log('UI elements created');
+  }
+
+  /**
+   * Load a test model from the assets directory
+   * @param modelPath Path to the model relative to assets/models
+   */
+  private async loadTestModel(modelPath: string): Promise<THREE.Object3D | null> {
+    if (!this.assetManager || !this.world) {
+      console.error('Asset manager or world not initialized');
+      return null;
+    }
+    
+    try {
+      // Update status text
+      if (this.statusText) {
+        this.statusText.setText(`Loading model: ${modelPath}...`);
+      }
+      
+      // Load the model as entities
+      const rootObject = await this.assetManager.createEntitiesFromModel(
+        `models/${modelPath}`,
+        null,
+        { wireframe: true, color: 0x00ffff }
+      );
+      
+      // Update status text
+      if (this.statusText) {
+        this.statusText.setText(`Model loaded: ${modelPath}`);
+      }
+      
+      return rootObject;
+    } catch (error) {
+      console.error('Error loading model:', error);
+      
+      // Update status text
+      if (this.statusText) {
+        this.statusText.setText(`Error loading model: ${modelPath}`);
+      }
+      
+      return null;
+    }
   }
 } 

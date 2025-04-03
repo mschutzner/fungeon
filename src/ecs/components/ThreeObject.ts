@@ -34,11 +34,8 @@ export class ThreeObject extends BaseComponent {
    * In later phases, it will be required
    */
   public static override getRequirements(): ComponentClass[] {
-    // Start with empty requirements in Phase 4
-    return [];
-    
-    // In Phase 8, we'll update this to:
-    // return [Transform];
+    // Update to require Transform
+    return [Transform];
   }
   
   /**

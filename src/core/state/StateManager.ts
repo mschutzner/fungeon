@@ -29,7 +29,7 @@ export class StateManager {
   
   constructor() {
     // Register available states
-    this.registerStateType('TestState', TestState);
+    this.registerStateType('testState', TestState);
     this.registerStateType('demoMenu', DemoMenuState);
     this.registerStateType('trackToDemo', TrackToDemo);
     this.registerStateType('lookAtDemo', LookAtDemo);

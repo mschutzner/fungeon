@@ -17,6 +17,7 @@ export enum GeometryType {
   DEBUG_AXIS = 'debugAxis',
   GRID = 'grid',
   PANE = 'pane',
+  MODEL = 'model',
 }
 
 /**
@@ -86,11 +87,8 @@ export class MeshComponent extends BaseComponent {
    * In Phase 7, we don't enforce dependencies yet
    */
   public static override getRequirements(): ComponentClass[] {
-    // In Phase 7, no enforced requirements
-    return [];
-    
-    // In Phase 8, we'll update to:
-    // return [Transform];
+    // Update dependencies for proper model loading
+    return [Transform, ThreeObject];
   }
   
   /**
@@ -253,6 +251,11 @@ export class MeshComponent extends BaseComponent {
         this.geometry.setAttribute('position', new THREE.BufferAttribute(axisVertices, 3));
         this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         break;
+      case GeometryType.MODEL:
+        // For MODEL type, we'll create a placeholder geometry
+        // The actual model geometry will be loaded by the AssetManager
+        this.geometry = new THREE.BufferGeometry();
+        break;
       default:
         // Default to box if unknown type
         this.geometry = new THREE.BoxGeometry(
@@ -284,6 +287,13 @@ export class MeshComponent extends BaseComponent {
       this.material = new THREE.LineBasicMaterial({
         color: this.color,
         linewidth: 1  // Note: Line width may not work on all platforms due to WebGL limitations
+      });
+    } else if (this.geometryType === GeometryType.MODEL) {
+      // For models, we'll use MeshStandardMaterial which works well with GLTF assets
+      // This is just a placeholder - actual materials will be loaded with the model
+      this.material = new THREE.MeshStandardMaterial({
+        color: this.color,
+        wireframe: this.wireframe,
       });
     } else {
       // For other geometry types, use the standard material
