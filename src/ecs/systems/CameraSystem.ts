@@ -109,6 +109,17 @@ export class CameraSystem implements ISystem {
   }
   
   /**
+   * Get the active camera's clear color
+   * @returns The clear color, defaulting to black if no active camera
+   */
+  getActiveClearColor(): THREE.Color {
+    if (this.activeCamera) {
+      return this.activeCamera.getClearColor();
+    }
+    return new THREE.Color(0x000000); // Default to black
+  }
+  
+  /**
    * Set a camera as active
    * @param camera The camera component to set as active
    */

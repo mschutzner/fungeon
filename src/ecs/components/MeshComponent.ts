@@ -76,11 +76,22 @@ export class MeshComponent extends BaseComponent {
    * Constructor
    * @param geometryType Type of geometry to create
    * @param color Color of the mesh
+   * @param geometry Optional BufferGeometry to use when geometryType is MODEL
    */
-  constructor(geometryType: GeometryType = GeometryType.BOX, color: number = 0x00ff00) {
+  constructor(
+    geometryType: GeometryType = GeometryType.BOX, 
+    color: number = 0x00ff00,
+    geometry?: THREE.BufferGeometry
+  ) {
     super();
     this.geometryType = geometryType;
     this.color = color;
+    
+    // If geometry is provided and type is MODEL, set it directly
+    if (geometryType === GeometryType.MODEL && geometry) {
+      console.log('Setting geometry directly');
+      this.geometry = geometry;
+    }
   }
   
   /**
@@ -252,9 +263,11 @@ export class MeshComponent extends BaseComponent {
         this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         break;
       case GeometryType.MODEL:
-        // For MODEL type, we'll create a placeholder geometry
-        // The actual model geometry will be loaded by the AssetManager
-        this.geometry = new THREE.BufferGeometry();
+        if(!this.geometry) {
+          // For MODEL type, we'll create a placeholder geometry
+          // The actual model geometry will be loaded by the AssetManager
+          this.geometry = new THREE.BufferGeometry();
+        }
         break;
       default:
         // Default to box if unknown type
@@ -289,9 +302,8 @@ export class MeshComponent extends BaseComponent {
         linewidth: 1  // Note: Line width may not work on all platforms due to WebGL limitations
       });
     } else if (this.geometryType === GeometryType.MODEL) {
-      // For models, we'll use MeshStandardMaterial which works well with GLTF assets
-      // This is just a placeholder - actual materials will be loaded with the model
-      this.material = new THREE.MeshStandardMaterial({
+      // For models, use MeshBasicMaterial for consistent wireframe rendering
+      this.material = new THREE.MeshBasicMaterial({
         color: this.color,
         wireframe: this.wireframe,
       });
@@ -353,6 +365,41 @@ export class MeshComponent extends BaseComponent {
       this.mesh.material = this.material!;
     } else {
       // Create new mesh
+      this.createMesh();
+    }
+    
+    // Update ThreeObject if entity has one
+    const entity = this.entity;
+    if (entity && this.mesh) {
+      const threeObject = entity.getComponent(ThreeObject);
+      if (threeObject) {
+        threeObject.setObject(this.mesh);
+      }
+    }
+  }
+  
+  /**
+   * Set the geometry directly (for use with model geometries)
+   * @param geometry The BufferGeometry to use
+   */
+  public setGeometry(geometry: THREE.BufferGeometry): void {
+    // Dispose existing geometry
+    if (this.geometry) {
+      this.geometry.dispose();
+    }
+    
+    // Set the new geometry
+    this.geometry = geometry;
+    
+    // Update or create material if needed
+    if (!this.material) {
+      this.createMaterial();
+    }
+    
+    // Update or create the mesh
+    if (this.mesh) {
+      this.mesh.geometry = this.geometry;
+    } else {
       this.createMesh();
     }
     

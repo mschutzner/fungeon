@@ -1,19 +1,19 @@
 import { State } from './State';
 import { Renderer } from '../../rendering/Renderer';
 import { TestState } from './TestState';
-import { DemoMenuState } from './DemoMenuState';
-import { TrackToDemo } from './TrackToDemo';
-import { LookAtDemo } from './LookAtDemo';
-import { CopyTransformDemo } from './CopyTransformDemo';
-import { DistanceDemo } from './DistanceDemo';
-import { LimitDemo } from './LimitDemo';
-import { LockDemo } from './LockDemo';
-import { PathFollowDemo } from './PathFollowDemo';
-import { OrientDemo } from './OrientDemo';
-import { PivotDemo } from './PivotDemo';
-import { SpringDemo } from './SpringDemo';
-import { FloorDemo } from './FloorDemo';
 import { Engine } from '../Engine';
+import { EventSystem } from '../events/EventSystem';
+import { AssetEvents } from '../assets/AssetManager';
+
+/**
+ * Events emitted by the StateManager
+ */
+export enum StateEvents {
+  STATE_CHANGED = 'state:changed',
+  STATE_PRELOAD_START = 'state:preload_start',
+  STATE_PRELOAD_COMPLETE = 'state:preload_complete',
+  STATE_PRELOAD_PROGRESS = 'state:preload_progress',
+}
 
 /**
  * StateManager class for managing game states and transitions
@@ -26,32 +26,25 @@ export class StateManager {
   private stateRegistry: Map<string, new (engine: Engine) => State> = new Map();
   private renderer: Renderer | null = null;
   private engine: Engine | null = null;
+  private eventSystem: EventSystem;
   
   constructor() {
     // Register available states
     this.registerStateType('testState', TestState);
-    this.registerStateType('demoMenu', DemoMenuState);
-    this.registerStateType('trackToDemo', TrackToDemo);
-    this.registerStateType('lookAtDemo', LookAtDemo);
-    this.registerStateType('copyTransformDemo', CopyTransformDemo);
-    this.registerStateType('distanceDemo', DistanceDemo);
-    this.registerStateType('limitDemo', LimitDemo);
-    this.registerStateType('lockDemo', LockDemo);
-    this.registerStateType('pathFollowDemo', PathFollowDemo);
-    this.registerStateType('orientDemo', OrientDemo);
-    this.registerStateType('pivotDemo', PivotDemo);
-    this.registerStateType('springDemo', SpringDemo);
-    this.registerStateType('floorDemo', FloorDemo);
     
     // Register other constraint demos here when they're implemented
     // Only IK demo remains to be implemented
-  }
-  
-  /**
-   * Set the renderer instance
-   */
-  setRenderer(renderer: Renderer): void {
-    this.renderer = renderer;
+    
+    this.eventSystem = EventSystem.getInstance();
+    
+    // Subscribe to asset loading events to forward them as state preloading events
+    this.eventSystem.subscribe(AssetEvents.PRELOAD_PROGRESS, (data) => {
+      this.eventSystem.publish(StateEvents.STATE_PRELOAD_PROGRESS, data);
+    });
+    
+    this.eventSystem.subscribe(AssetEvents.PRELOAD_COMPLETE, (data) => {
+      this.eventSystem.publish(StateEvents.STATE_PRELOAD_COMPLETE, data);
+    });
   }
   
   /**
@@ -59,6 +52,13 @@ export class StateManager {
    */
   setEngine(engine: Engine): void {
     this.engine = engine;
+  }
+  
+  /**
+   * Set the renderer instance
+   */
+  setRenderer(renderer: Renderer): void {
+    this.renderer = renderer;
   }
   
   /**
@@ -115,6 +115,9 @@ export class StateManager {
       return;
     }
     
+    // Start transition
+    this.isTransitioning = true;
+    
     // Check if the state exists already
     let newState = this.states.get(stateName);
     
@@ -125,11 +128,11 @@ export class StateManager {
     
     if (!newState) {
       console.error(`State not found: ${stateName}`);
+      this.isTransitioning = false;
       return;
     }
     
-    // Start transition
-    this.isTransitioning = true;
+    console.log(`Starting transition to state: ${stateName}`);
     
     // Exit current state if it exists
     if (this.currentState) {
@@ -145,6 +148,18 @@ export class StateManager {
       this.renderer.clear();
     }
     
+    // Preload assets for the new state
+    this.eventSystem.publish(StateEvents.STATE_PRELOAD_START, { state: stateName });
+    console.log(`Preloading assets for state: ${stateName}`);
+    
+    try {
+      await newState.preloadAssets();
+      console.log(`Asset preloading complete for state: ${stateName}`);
+    } catch (error) {
+      console.error(`Error preloading assets for state: ${stateName}`, error);
+      // Continue with state transition even if preloading fails
+    }
+    
     // Enter new state
     this.currentState = newState;
     await newState.enter();
@@ -155,6 +170,7 @@ export class StateManager {
     }
     
     console.log(`Switched to state: ${stateName}`);
+    this.eventSystem.publish(StateEvents.STATE_CHANGED, { state: stateName });
     
     // End transition
     this.isTransitioning = false;

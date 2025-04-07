@@ -5,6 +5,8 @@ import { StateManager } from './state/StateManager';
 import { EventSystem } from './events/EventSystem';
 import { ServiceManager } from './services/ServiceManager';
 import { InputManager } from './input/InputManager';
+import { World } from '../ecs/World';
+import { AssetManager } from './assets/AssetManager';
 
 /**
  * Main game engine class
@@ -16,6 +18,8 @@ export class Engine {
   private eventSystem!: EventSystem;
   private serviceManager!: ServiceManager;
   private inputManager!: InputManager;
+  private world!: World;
+  private assetManager!: AssetManager;
   
   private running: boolean = false;
   private lastFrameTime: number = 0;
@@ -136,6 +140,13 @@ export class Engine {
     // Register engine as a service
     this.serviceManager.register('engine', this);
     
+    // Initialize the asset manager
+    this.assetManager = AssetManager.getInstance();
+    this.assetManager.setBasePath('./assets/');
+    
+    // Register asset manager as a service
+    this.serviceManager.register('assetManager', this.assetManager);
+    
     // Find the game container
     const container = document.getElementById('game-container');
     if (!container) {
@@ -154,6 +165,19 @@ export class Engine {
     
     // Register input manager as a service
     this.serviceManager.register('inputManager', this.inputManager);
+    
+    // Create a world for ECS
+    this.world = new World();
+    this.world.initializeCoreEcsSystems();
+    
+    // Connect renderer with world
+    this.world.setRenderer(this.renderer);
+    
+    // Connect StateManager with Renderer
+    this.stateManager.setRenderer(this.renderer);
+    
+    // Log initialization progress
+    console.log('Engine systems initialized, loading initial state...');
     
     // Load initial state from config
     await this.loadInitialState();
@@ -310,5 +334,12 @@ export class Engine {
    */
   getTps(): number {
     return this.currentTPS;
+  }
+  
+  /**
+   * Get the asset manager
+   */
+  getAssetManager(): AssetManager {
+    return this.assetManager;
   }
 } 

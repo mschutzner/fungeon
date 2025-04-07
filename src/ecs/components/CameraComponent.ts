@@ -56,6 +56,12 @@ export class CameraComponent extends BaseComponent {
   private isActive: boolean = false;
   
   /**
+   * Clear color for the camera's viewport
+   * This will be used when rendering with this camera
+   */
+  private clearColor: THREE.Color = new THREE.Color(0x000000);
+  
+  /**
    * Constructor
    * @param type Type of camera to create
    * @param isActive Whether this is the active camera
@@ -195,6 +201,26 @@ export class CameraComponent extends BaseComponent {
   }
   
   /**
+   * Get the clear color for this camera
+   * @returns The clear color
+   */
+  public getClearColor(): THREE.Color {
+    return this.clearColor;
+  }
+  
+  /**
+   * Set the clear color for this camera
+   * @param color The clear color (can be a hex number, THREE.Color, or CSS string)
+   */
+  public setClearColor(color: number | string | THREE.Color): void {
+    if (color instanceof THREE.Color) {
+      this.clearColor = color;
+    } else {
+      this.clearColor = new THREE.Color(color);
+    }
+  }
+  
+  /**
    * Called when the component is added to an entity
    * @param entity The entity this component was added to
    */
@@ -248,7 +274,8 @@ export class CameraComponent extends BaseComponent {
       aspect: this.aspect,
       near: this.near,
       far: this.far,
-      size: this.size
+      size: this.size,
+      clearColor: this.clearColor.getHex()
     };
   }
   
@@ -261,58 +288,36 @@ export class CameraComponent extends BaseComponent {
     
     const cameraData = data as Record<string, any>;
     
-    // Restore camera type if specified
-    if (cameraData.type && 
-        (cameraData.type === CameraType.PERSPECTIVE || 
-         cameraData.type === CameraType.ORTHOGRAPHIC)) {
-      
-      // Only recreate camera if type has changed
-      if (this.type !== cameraData.type) {
-        this.type = cameraData.type;
-        
-        // Create the appropriate camera
-        if (this.type === CameraType.PERSPECTIVE) {
-          this.camera = new THREE.PerspectiveCamera(this.fov, this.aspect, this.near, this.far);
-        } else {
-          const halfSize = this.size / 2;
-          const halfWidth = halfSize * this.aspect;
-          this.camera = new THREE.OrthographicCamera(
-            -halfWidth, halfWidth, 
-            halfSize, -halfSize, 
-            this.near, this.far
-          );
-        }
-      }
+    // Restore camera type
+    if (cameraData.type) {
+      this.type = cameraData.type as CameraType;
     }
     
-    // Restore properties
-    if (typeof cameraData.isActive === 'boolean') this.isActive = cameraData.isActive;
-    if (typeof cameraData.fov === 'number') this.fov = cameraData.fov;
-    if (typeof cameraData.aspect === 'number') this.aspect = cameraData.aspect;
-    if (typeof cameraData.near === 'number') this.near = cameraData.near;
-    if (typeof cameraData.far === 'number') this.far = cameraData.far;
-    if (typeof cameraData.size === 'number') this.size = cameraData.size;
+    // Restore active state
+    if (typeof cameraData.isActive === 'boolean') {
+      this.isActive = cameraData.isActive;
+    }
     
-    // Update camera properties
-    if (this.type === CameraType.PERSPECTIVE) {
-      const perspCamera = this.camera as THREE.PerspectiveCamera;
-      perspCamera.fov = this.fov;
-      perspCamera.aspect = this.aspect;
-      perspCamera.near = this.near;
-      perspCamera.far = this.far;
-      perspCamera.updateProjectionMatrix();
-    } else {
-      const orthoCamera = this.camera as THREE.OrthographicCamera;
-      const halfSize = this.size / 2;
-      const halfWidth = halfSize * this.aspect;
-      
-      orthoCamera.top = halfSize;
-      orthoCamera.bottom = -halfSize;
-      orthoCamera.left = -halfWidth;
-      orthoCamera.right = halfWidth;
-      orthoCamera.near = this.near;
-      orthoCamera.far = this.far;
-      orthoCamera.updateProjectionMatrix();
+    // Restore camera properties
+    if (typeof cameraData.fov === 'number') {
+      this.setFov(cameraData.fov);
+    }
+    
+    if (typeof cameraData.aspect === 'number') {
+      this.setAspect(cameraData.aspect);
+    }
+    
+    if (typeof cameraData.near === 'number' && typeof cameraData.far === 'number') {
+      this.setClippingPlanes(cameraData.near, cameraData.far);
+    }
+    
+    if (typeof cameraData.size === 'number') {
+      this.setSize(cameraData.size);
+    }
+    
+    // Restore clear color
+    if (typeof cameraData.clearColor === 'number') {
+      this.setClearColor(cameraData.clearColor);
     }
   }
 } 

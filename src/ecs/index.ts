@@ -11,6 +11,7 @@ export { World } from './World';
 export { Transform, Vector3, Rotation } from './components/Transform';
 export { ThreeObject } from './components/ThreeObject';
 export { MeshComponent, GeometryType } from './components/MeshComponent';
+export { MaterialComponent } from './components/MaterialComponent';
 export { CameraComponent, CameraType } from './components/CameraComponent';
 export { 
   ConstraintComponent, 

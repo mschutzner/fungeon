@@ -150,13 +150,40 @@ export class ThreeSceneSystem implements ISystem {
           }
         }
       } else {
-        // No parent, make sure it's in the scene
-        if (!obj.parent) {
-          scene.add(obj);
-        } else if (obj.parent !== scene) {
-          // If it has a parent but it's not the scene, and it's not in our parent map
-          // it means it was previously parented in Three.js directly, not through our system
-          // We'll respect that and not change it
+        // Check if this entity is a child in the entity hierarchy
+        let isChild = false;
+        
+        // Check all entities to see if any have this as a child in their ThreeObject
+        for (const potentialParent of entities) {
+          if (potentialParent.id === entity.id) continue; // Skip self
+          
+          const parentThreeObj = potentialParent.getComponent(ThreeObject);
+          if (parentThreeObj && parentThreeObj.children.some(child => child.id === entity.id)) {
+            isChild = true;
+            
+            // Update Three.js parent-child relationship if needed
+            if (obj.parent !== parentThreeObj.object) {
+              if (obj.parent) {
+                obj.parent.remove(obj);
+              }
+              parentThreeObj.object.add(obj);
+              
+              // Store in parent map for quick lookups
+              this.entityToParentMap.set(entity.id, potentialParent.id);
+            }
+            break;
+          }
+        }
+        
+        // If not a child of any entity, make sure it's in the scene
+        if (!isChild) {
+          if (!obj.parent) {
+            scene.add(obj);
+          } else if (obj.parent !== scene) {
+            // If it has a parent but it's not the scene, and it's not a child in our entity hierarchy
+            // it means it was previously parented in Three.js directly, not through our system
+            // We'll respect that and not change it
+          }
         }
       }
       
@@ -183,11 +210,22 @@ export class ThreeSceneSystem implements ISystem {
     // Flag that the parent has changed
     childObj.flagParentChanged();
     
+    // Remove from previous parent's children list if it exists
+    for (const entity of this.world.getAllEntities()) {
+      const threeObj = entity.getComponent(ThreeObject);
+      if (threeObj) {
+        threeObj.removeChild(childEntity as any);
+      }
+    }
+    
     if (parentEntity) {
       const parentObj = parentEntity.getComponent(ThreeObject);
       if (parentObj) {
         // Store parent mapping
         this.entityToParentMap.set(childEntity.id, parentEntity.id);
+        
+        // Add to parent's children list
+        parentObj.addChild(childEntity as any);
       } else {
         console.warn('Parent entity does not have a ThreeObject component');
       }

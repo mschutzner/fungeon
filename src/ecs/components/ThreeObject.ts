@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BaseComponent } from '../Component';
 import { ComponentClass, IEntity } from '../types';
 import { Transform } from './Transform';
+import { Entity } from '../Entity';
 
 /**
  * Component that links an entity to a Three.js Object3D
@@ -19,6 +20,11 @@ export class ThreeObject extends BaseComponent {
    * @internal Used by ThreeSceneSystem
    */
   private parentChanged: boolean = false;
+  
+  /**
+   * Child entities (for entity hierarchy)
+   */
+  public children: Entity[] = [];
   
   /**
    * Constructor
@@ -61,6 +67,32 @@ export class ThreeObject extends BaseComponent {
   public setParent(parentEntity: IEntity | null): void {
     this.parentChanged = true;
     // Parent-child relationship is managed by the ThreeScene system
+  }
+  
+  /**
+   * Add a child entity
+   * @param childEntity The child entity to add
+   */
+  public addChild(childEntity: Entity): void {
+    if (!this.children.includes(childEntity)) {
+      this.children.push(childEntity);
+      this.flagParentChanged();
+    }
+  }
+  
+  /**
+   * Remove a child entity
+   * @param childEntity The child entity to remove
+   * @returns True if the child was removed
+   */
+  public removeChild(childEntity: Entity): boolean {
+    const index = this.children.indexOf(childEntity);
+    if (index !== -1) {
+      this.children.splice(index, 1);
+      this.flagParentChanged();
+      return true;
+    }
+    return false;
   }
   
   /**
@@ -136,6 +168,7 @@ export class ThreeObject extends BaseComponent {
       name: this.object.name,
       visible: this.object.visible,
       type: this.object.type,
+      childrenIds: this.children.map(child => child.id)
       // We don't serialize position/rotation/scale here because that's
       // handled by the Transform component
     };
@@ -156,5 +189,7 @@ export class ThreeObject extends BaseComponent {
     
     // Note: We don't restore position/rotation/scale here because that's
     // handled by the Transform component
+    
+    // Note: Child entity references will be restored by the World deserializer
   }
 } 

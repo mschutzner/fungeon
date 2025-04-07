@@ -39,6 +39,11 @@ export class World implements IWorld {
   private scene: THREE.Scene;
   
   /**
+   * Ambient light for the scene
+   */
+  private ambientLight: THREE.AmbientLight | null = null;
+  
+  /**
    * Reference to renderer
    */
   private renderer: Renderer | null = null;
@@ -56,7 +61,12 @@ export class World implements IWorld {
   constructor() {
     // Create a default scene
     this.scene = new THREE.Scene();
-    console.log('Created new Three.js scene for World');
+    
+    // Create default ambient light (invisible by default with intensity 0)
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0);
+    this.scene.add(this.ambientLight);
+    
+    console.log('Created new Three.js scene for World with default ambient light');
   }
   
   /**
@@ -348,6 +358,10 @@ export class World implements IWorld {
     
     // Create a new scene
     this.scene = new THREE.Scene();
+    
+    // Create new ambient light with default settings
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0);
+    this.scene.add(this.ambientLight);
   }
   
   /**
@@ -464,5 +478,110 @@ export class World implements IWorld {
         });
       }
     });
+  }
+  
+  /**
+   * Add an existing entity to this world
+   * @param entity The entity to add
+   * @returns The added entity
+   */
+  public addEntity(entity: IEntity): IEntity {
+    // Cast to Entity to access _setWorld
+    const entityImpl = entity as Entity;
+    
+    // Set the world reference
+    entityImpl._setWorld(this);
+    
+    // Add to entities map
+    this.entities.set(entity.id, entityImpl);
+    
+    // Add to named entities map if name is provided
+    if (entity.name) {
+      this.entitiesByName.set(entity.name, entityImpl);
+    }
+    
+    // Check for ThreeObject component to find child entities
+    const threeObj = entity.getComponent(ThreeObject);
+    if (threeObj && threeObj.children.length > 0) {
+      // Recursively add all child entities
+      for (const childEntity of threeObj.children) {
+        // Don't re-add if already in this world
+        if (this.getEntity(childEntity.id) === null) {
+          this.addEntity(childEntity);
+        }
+      }
+    }
+    
+    return entity;
+  }
+  
+  /**
+   * Remove an entity from this world without destroying it
+   * @param entity The entity or entity ID to remove
+   * @returns The removed entity or null if not found
+   */
+  public removeEntity(entity: IEntity | number): IEntity | null {
+    const id = typeof entity === 'number' ? entity : entity.id;
+    const entityToRemove = this.entities.get(id);
+    
+    if (!entityToRemove) return null;
+    
+    // Remove from named entities map if it has a name
+    if (entityToRemove.name) {
+      this.entitiesByName.delete(entityToRemove.name);
+    }
+    
+    // Check for ThreeObject component to find child entities
+    const threeObj = entityToRemove.getComponent(ThreeObject);
+    if (threeObj && threeObj.children.length > 0) {
+      // Recursively remove all child entities
+      for (const childEntity of [...threeObj.children]) {
+        this.removeEntity(childEntity);
+      }
+    }
+    
+    // Remove from entities map
+    this.entities.delete(id);
+    
+    // Clear world reference
+    (entityToRemove as Entity)._setWorld(null);
+    
+    return entityToRemove;
+  }
+  
+  /**
+   * Set the ambient light color
+   * @param color The color for the ambient light (can be a hex number, THREE.Color, or CSS string)
+   * @returns This world for method chaining
+   */
+  public setAmbientLightColor(color: number | string | THREE.Color): this {
+    if (this.ambientLight) {
+      if (color instanceof THREE.Color) {
+        this.ambientLight.color.copy(color);
+      } else {
+        this.ambientLight.color.set(color);
+      }
+    }
+    return this;
+  }
+  
+  /**
+   * Set the ambient light intensity
+   * @param intensity The intensity of the ambient light (0 to disable)
+   * @returns This world for method chaining
+   */
+  public setAmbientLightIntensity(intensity: number): this {
+    if (this.ambientLight) {
+      this.ambientLight.intensity = intensity;
+    }
+    return this;
+  }
+  
+  /**
+   * Get the ambient light
+   * @returns The ambient light object or null if not available
+   */
+  public getAmbientLight(): THREE.AmbientLight | null {
+    return this.ambientLight;
   }
 } 

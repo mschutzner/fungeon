@@ -215,6 +215,12 @@ export class Renderer {
     
     // Render the WebGL scene to offscreen canvas if it exists
     if (this.activeScene && this.renderer) {
+      // Set renderer clear color from the camera system
+      if (this.cameraSystem) {
+        const clearColor = this.cameraSystem.getActiveClearColor();
+        this.renderer.setClearColor(clearColor);
+      }
+      
       this.renderer.render(this.activeScene, camera);
     }
     

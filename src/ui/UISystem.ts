@@ -1,5 +1,6 @@
 import { Config } from '../core/Config';
 import { UIElement } from './elements/UIElement';
+import { AssetManager, FontLoadResult } from '../core/assets/AssetManager';
 
 /**
  * Font info interface
@@ -23,13 +24,14 @@ export class UISystem {
   private height: number;
   private rootElements: UIElement[] = [];
   
-  // Font assets
-  private fontInfo: Map<string, FontInfo> = new Map();
+  // Asset manager instance
+  private assetManager: AssetManager;
   
   constructor() {
     const config = Config.getInstance();
     this.width = config.resolution.width;
     this.height = config.resolution.height;
+    this.assetManager = AssetManager.getInstance();
   }
   
   /**
@@ -43,100 +45,7 @@ export class UISystem {
     // Ensure image smoothing is disabled for pixelated look
     this.ctx.imageSmoothingEnabled = false;
     
-    // Load fonts
-    await this.loadFonts();
-    
     console.log('UI system initialized');
-  }
-  
-  /**
-   * Load all fonts
-   */
-  private async loadFonts(): Promise<void> {
-    try {
-      const config = Config.getInstance();
-      
-      // Load each font defined in the config
-      for (const [name, fontConfig] of Object.entries(config.config.fonts)) {
-        await this.loadFont(
-          name,
-          fontConfig.url,
-          fontConfig.charWidth,
-          fontConfig.charHeight
-        );
-      }
-      
-      console.log('All fonts loaded successfully');
-    } catch (error) {
-      console.error('Failed to load fonts:', error);
-    }
-  }
-  
-  /**
-   * Load a specific font
-   */
-  private async loadFont(name: string, url: string, charWidth: number, charHeight: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      console.log(`Loading font from: ${url}`);
-      const img = new Image();
-      
-      img.onload = () => {
-        // Calculate font metrics
-        const charsPerRow = Math.floor(img.width / charWidth);
-        const rows = Math.floor(img.height / charHeight);
-        
-        // Create offscreen canvas for the font atlas
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Could not get 2D context for font canvas'));
-          return;
-        }
-        ctx.drawImage(img, 0, 0);
-        
-        // Get font config
-        const config = Config.getInstance();
-        const fontConfig = config.config.fonts[name];
-        
-        // Create custom widths map if specified
-        let customWidths: Map<number, number> | undefined;
-        if (fontConfig.customWidths) {
-          customWidths = new Map();
-          for (const [char, width] of Object.entries(fontConfig.customWidths)) {
-            if (char.length !== 1) {
-              console.warn(`Invalid custom width key: "${char}". Must be a single character.`);
-              continue;
-            }
-            const charCode = char.charCodeAt(0);
-            customWidths.set(charCode, width);
-          }
-        }
-        
-        // Store the font info
-        this.fontInfo.set(name, {
-          charWidth,
-          charHeight,
-          charsPerRow,
-          rows,
-          canvas,
-          customWidths,
-          leading: fontConfig.leading || 0
-        });
-        
-        console.log(`Font ${name} loaded successfully: ${img.width}x${img.height}, ${charWidth}x${charHeight} chars, ${charsPerRow} chars per row, ${rows} rows`);
-        resolve();
-      };
-      
-      img.onerror = (err) => {
-        console.error(`Failed to load font image: ${url}`, err);
-        reject(new Error(`Failed to load font image: ${url}`));
-      };
-      
-      img.src = url;
-    });
   }
   
   /**
@@ -193,14 +102,14 @@ export class UISystem {
    * Get font information by name
    */
   getFontInfo(fontName: string): FontInfo | undefined {
-    return this.fontInfo.get(fontName);
+    return this.assetManager.getFontInfo(fontName);
   }
   
   /**
    * Measure text width in pixels
    */
   measureText(fontName: string, text: string, scale: number = 1): number {
-    const info = this.fontInfo.get(fontName);
+    const info = this.getFontInfo(fontName);
     if (!info) return 0;
     
     return text.length * info.charWidth * scale;
@@ -210,7 +119,7 @@ export class UISystem {
    * Get font character width
    */
   getCharWidth(fontName: string, charCode: number = 0, scale: number = 1): number {
-    const info = this.fontInfo.get(fontName);
+    const info = this.getFontInfo(fontName);
     if (!info) return 0;
     
     // Check for custom width first
@@ -227,7 +136,7 @@ export class UISystem {
    * Get font character height
    */
   getCharHeight(fontName: string, scale: number = 1): number {
-    const info = this.fontInfo.get(fontName);
+    const info = this.getFontInfo(fontName);
     return info ? info.charHeight * scale : 0;
   }
   
@@ -235,7 +144,7 @@ export class UISystem {
    * Check if font is loaded
    */
   isFontLoaded(fontName: string): boolean {
-    return this.fontInfo.has(fontName);
+    return this.assetManager.isFontLoaded(fontName);
   }
   
   /**

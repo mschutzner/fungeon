@@ -70,8 +70,9 @@ export interface IEntity extends IUniqueId, ISerializable {
   
   /**
    * Get the world this entity belongs to
+   * Can be null if the entity isn't added to any world
    */
-  readonly world: IWorld;
+  readonly world: IWorld | null;
   
   /**
    * Check if the entity has a component of the given type
@@ -184,6 +185,20 @@ export interface IWorld extends ISerializable {
    * @param name Optional name for the entity
    */
   createEntity(name?: string): IEntity;
+  
+  /**
+   * Add an existing entity to this world
+   * @param entity The entity to add
+   * @returns The added entity
+   */
+  addEntity(entity: IEntity): IEntity;
+  
+  /**
+   * Remove an entity from this world without destroying it
+   * @param entity The entity or entity ID to remove
+   * @returns The removed entity or null if not found
+   */
+  removeEntity(entity: IEntity | number): IEntity | null;
   
   /**
    * Get an entity by ID

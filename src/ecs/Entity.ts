@@ -29,7 +29,7 @@ export class Entity implements IEntity {
   /**
    * World this entity belongs to
    */
-  private _world: IWorld;
+  private _world: IWorld | null;
   
   /**
    * Static counter for entity IDs
@@ -41,7 +41,7 @@ export class Entity implements IEntity {
    * @param world The world this entity belongs to
    * @param name Optional name for the entity
    */
-  constructor(world: IWorld, name?: string) {
+  constructor(world: IWorld | null, name?: string) {
     this.id = Entity.nextId++;
     this._world = world;
     this.name = name;
@@ -50,8 +50,17 @@ export class Entity implements IEntity {
   /**
    * Get the world this entity belongs to
    */
-  public get world(): IWorld {
+  public get world(): IWorld | null {
     return this._world;
+  }
+  
+  /**
+   * Set the world this entity belongs to
+   * @param world The world this entity should belong to
+   * @internal Used by World.addEntity and World.removeEntity
+   */
+  public _setWorld(world: IWorld | null): void {
+    this._world = world;
   }
   
   /**
@@ -283,7 +292,11 @@ export class Entity implements IEntity {
    * Destroy this entity, removing it from the world
    */
   public destroy(): void {
-    this._world.destroyEntity(this);
+    if (this._world) {
+      this._world.destroyEntity(this);
+    } else {
+      console.warn(`Cannot destroy entity ${this.id} - not in a world`);
+    }
   }
   
   /**
