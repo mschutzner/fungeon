@@ -13,8 +13,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', () => {
       engine.resize();
     });
-    
-    console.log('Fungeon engine started successfully');
   } catch (error) {
     console.error('Failed to start engine:', error);
   }

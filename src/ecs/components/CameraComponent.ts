@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BaseComponent } from '../Component';
-import { ComponentClass } from '../types';
-import { Transform } from './Transform';
+import { ComponentClass, IEntity } from '../types';
+import { ThreeObject } from './ThreeObject';
 
 /**
  * Enum for camera types
@@ -90,7 +90,7 @@ export class CameraComponent extends BaseComponent {
    * Get required components
    */
   public static override getRequirements(): ComponentClass[] {
-    return [Transform];
+    return [ThreeObject];
   }
   
   /**
@@ -224,43 +224,13 @@ export class CameraComponent extends BaseComponent {
    * Called when the component is added to an entity
    * @param entity The entity this component was added to
    */
-  public override onAttach(entity: any): void {
-    // Get the entity's transform component
-    const transform = entity.getComponent(Transform);
-    if (transform) {
-      // Set initial position and rotation from transform
-      const position = transform.position;
-      const rotation = transform.rotation;
-      
-      this.camera.position.set(position.x, position.y, position.z);
-      
-      // Convert rotation from degrees to radians
-      const toRad = (deg: number) => deg * (Math.PI / 180);
-      this.camera.rotation.set(
-        toRad(rotation.x),
-        toRad(rotation.y),
-        toRad(rotation.z)
-      );
+  public override onAttach(entity: IEntity): void {
+    // Get the ThreeObject component and set its object to this camera
+    const threeObj = entity.getComponent(ThreeObject);
+    if (threeObj) {
+      // If the ThreeObject already has a different object, replace it
+      threeObj.setObject(this.camera);
     }
-  }
-  
-  /**
-   * Called when the entity's transform changes
-   * This will be called by the CameraSystem
-   */
-  public updateFromTransform(transform: Transform): void {
-    // Update position
-    const position = transform.position;
-    this.camera.position.set(position.x, position.y, position.z);
-    
-    // Update rotation
-    const rotation = transform.rotation;
-    const toRad = (deg: number) => deg * (Math.PI / 180);
-    this.camera.rotation.set(
-      toRad(rotation.x),
-      toRad(rotation.y),
-      toRad(rotation.z)
-    );
   }
   
   /**

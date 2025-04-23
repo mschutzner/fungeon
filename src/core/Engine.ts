@@ -244,8 +244,11 @@ export class Engine {
     
     // Only render if enough time has passed
     if (this.renderDeltaTime >= minFrameTime) {
+      // Call state manager render method for rendering systems
+      this.stateManager.render(deltaTime);
+      
       // Render the game
-      this.renderer.render(this.renderDeltaTime);
+      this.renderer.render(deltaTime);
       
       // Reset render delta time (clamped to avoid spiral of death)
       this.renderDeltaTime = Math.min(this.renderDeltaTime - minFrameTime, minFrameTime * 3);

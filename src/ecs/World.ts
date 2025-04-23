@@ -3,8 +3,8 @@ import { Component, ComponentClass, IEntity, ISystem, IWorld } from './types';
 import * as THREE from 'three';
 import { ThreeObject } from './components/ThreeObject';
 import { Renderer } from '../rendering/Renderer';
-import { ThreeSceneSystem } from './systems/ThreeSceneSystem';
 import { CameraSystem } from './systems/CameraSystem';
+import { SceneSystem } from './systems/SceneSystem';
 import { ConstraintSystem } from './systems/ConstraintSystem';
 
 /**
@@ -51,8 +51,8 @@ export class World implements IWorld {
   /**
    * Core systems
    */
-  private threeSceneSystem: ThreeSceneSystem | null = null;
   private cameraSystem: CameraSystem | null = null;
+  private sceneSystem: SceneSystem | null = null;
   private constraintSystem: ConstraintSystem | null = null;
   
   /**
@@ -112,21 +112,14 @@ export class World implements IWorld {
   
   /**
    * Initialize core systems required for Three.js integration
-   * This will create and register ThreeSceneSystem and CameraSystem if they don't exist
+   * This will create and register necessary systems if they don't exist
    */
-  public initializeCoreEcsSystems(): void {
-    // Check if we already have a ThreeSceneSystem
-    this.threeSceneSystem = this.getSystem(ThreeSceneSystem);
-    if (!this.threeSceneSystem) {
-      this.threeSceneSystem = new ThreeSceneSystem();
-      this.registerSystem(this.threeSceneSystem);
-    }
-    
-    // Check if we already have a CameraSystem
-    this.cameraSystem = this.getSystem(CameraSystem);
-    if (!this.cameraSystem) {
-      this.cameraSystem = new CameraSystem();
-      this.registerSystem(this.cameraSystem);
+  public initializeCoreEcsSystems(): void {    
+    // Check if we already have a SceneSystem
+    this.sceneSystem = this.getSystem(SceneSystem);
+    if (!this.sceneSystem) {
+      this.sceneSystem = new SceneSystem();
+      this.registerSystem(this.sceneSystem);
     }
     
     // Check if we already have a ConstraintSystem
@@ -136,21 +129,21 @@ export class World implements IWorld {
       this.registerSystem(this.constraintSystem);
     }
     
+    // Check if we already have a CameraSystem
+    this.cameraSystem = this.getSystem(CameraSystem);
+    if (!this.cameraSystem) {
+      this.cameraSystem = new CameraSystem();
+      this.registerSystem(this.cameraSystem);
+    }
+    
     console.log('Core ECS systems initialized');
   }
   
   /**
-   * Get the ThreeSceneSystem
+   * Get the SceneSystem
    */
-  public getThreeSceneSystem(): ThreeSceneSystem | null {
-    return this.threeSceneSystem;
-  }
-  
-  /**
-   * Get the CameraSystem
-   */
-  public getCameraSystem(): CameraSystem | null {
-    return this.cameraSystem;
+  public getSceneSystem(): SceneSystem | null {
+    return this.sceneSystem;
   }
   
   /**
@@ -158,6 +151,13 @@ export class World implements IWorld {
    */
   public getConstraintSystem(): ConstraintSystem | null {
     return this.constraintSystem;
+  }
+  
+  /**
+   * Get the CameraSystem
+   */
+  public getCameraSystem(): CameraSystem | null {
+    return this.cameraSystem;
   }
   
   /**
@@ -232,6 +232,18 @@ export class World implements IWorld {
     const entityToDestroy = this.entities.get(id);
     
     if (!entityToDestroy) return false;
+    
+    // Check for ThreeObject component to find child entities
+    const threeObj = entityToDestroy.getComponent(ThreeObject);
+    if (threeObj && threeObj.children.length > 0) {
+      // Create a copy of the children array to avoid issues during iteration
+      const children = [...threeObj.children];
+      
+      // Recursively destroy all child entities
+      for (const childEntity of children) {
+        this.destroyEntity(childEntity);
+      }
+    }
     
     // Remove from named entities map if it has a name
     if (entityToDestroy.name) {
@@ -309,6 +321,19 @@ export class World implements IWorld {
   }
   
   /**
+   * Render all systems
+   * @param deltaTime Time since the last render in seconds
+   */
+  public render(deltaTime: number): void {
+    // Render all systems
+    for (const system of this.systems) {
+      if (system.enabled) {
+        system.render(deltaTime);
+      }
+    }
+  }
+  
+  /**
    * Query for entities with specific components
    * @param componentClasses The component classes to query for
    * @returns An array of entities with all the specified components
@@ -352,8 +377,8 @@ export class World implements IWorld {
     
     // Clear renderer reference
     this.renderer = null;
-    this.threeSceneSystem = null;
     this.cameraSystem = null;
+    this.sceneSystem = null;
     this.constraintSystem = null;
     
     // Create a new scene

@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { IEntity, ISystem, IWorld, ComponentClass } from '../types';
 import { CameraComponent, CameraType } from '../components/CameraComponent';
-import { Transform } from '../components/Transform';
 import { ThreeObject } from '../components/ThreeObject';
 
 /**
@@ -52,29 +51,21 @@ export class CameraSystem implements ISystem {
     // TypeScript doesn't allow passing different component types directly to query,
     // but the implementation accepts any ComponentClass, so we need to cast
     const CameraComponentClass = CameraComponent as unknown as ComponentClass;
-    const TransformClass = Transform as unknown as ComponentClass;
     
-    const entities = this.world.query(CameraComponentClass, TransformClass);
-    
-    // Update all cameras based on their transforms
-    this.updateCameras(entities);
+    const entities = this.world.query(CameraComponentClass);
     
     // Find active camera
     this.findActiveCamera(entities);
   }
   
   /**
-   * Update camera transforms
-   * @param entities Entities with camera components
+   * Render method required by ISystem
+   * CameraSystem doesn't need to do anything during the render phase
+   * @param deltaTime Time since last render in seconds
    */
-  private updateCameras(entities: IEntity[]): void {
-    for (const entity of entities) {
-      const camera = entity.getComponent(CameraComponent)!;
-      const transform = entity.getComponent(Transform)!;
-      
-      // Update camera transform from entity transform
-      camera.updateFromTransform(transform);
-    }
+  render(deltaTime: number): void {
+    // Camera system doesn't need to do anything during render
+    // This method is here to satisfy the ISystem interface
   }
   
   /**
@@ -166,29 +157,15 @@ export class CameraSystem implements ISystem {
     // Create the entity
     const entity = this.world.createEntity(name);
     
-    // Add transform
-    const transform = new Transform(position.x, position.y, position.z);
-    
-    // Safely set rotation if the rotation property exists
-    if (transform.rotation && typeof transform.rotation.set === 'function') {
-      transform.rotation.set(
-        rotation.x * (180 / Math.PI), // Convert from radians to degrees
-        rotation.y * (180 / Math.PI),
-        rotation.z * (180 / Math.PI)
-      );
-    }
-    
-    entity.addComponent(transform);
-    
     // Create camera
     const camera = new CameraComponent(type, isActive);
-    
-    // Add ThreeObject component to ensure the camera is added to the scene graph
-    const threeObj = new ThreeObject(camera.getCamera());
-    entity.addComponent(threeObj);
-    
-    // Add camera component after ThreeObject to ensure proper setup
     entity.addComponent(camera);
+
+    // Add ThreeObject component to ensure the camera is added to the scene graph
+    const threeObj = new ThreeObject(position, camera.getCamera());
+    entity.addComponent(threeObj);
+
+    camera.getCamera().setRotationFromEuler(rotation);
     
     // If this camera should be active, set it as active
     if (isActive) {

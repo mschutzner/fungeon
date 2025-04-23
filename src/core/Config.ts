@@ -21,6 +21,42 @@ interface ConfigData {
       };
     };
   };
+  mobileController?: {
+    enabled: boolean;
+    colors?: {
+      background?: string;
+      joystickBase?: string;
+      joystickStick?: string;
+      buttonA?: string;
+      buttonB?: string;
+      buttonX?: string;
+      buttonY?: string;
+      buttonStart?: string;
+      buttonSelect?: string;
+    };
+    keyBindings?: {
+      [key: string]: string;
+    };
+  };
+  input?: {
+    keyBindings: {
+      menu: string;
+      inventory: string;
+      move_up: string;
+      move_down: string;
+      move_left: string;
+      move_right: string;
+      action_up: string;
+      action_down: string;
+      action_left: string;
+      action_right: string;
+      previous: string;
+      next: string;
+      interact: string;
+      continue: string;
+      [key: string]: string; // Allow for custom bindings
+    };
+  };
   // Add more configuration properties as needed
 }
 
@@ -37,17 +73,6 @@ const DEFAULT_CONFIG: ConfigData = {
   debug: true,
   startState: 'TestState',
   fonts: {
-    vga: {
-      url: './assets/ascii/vga8x12.png',
-      charWidth: 8,
-      charHeight: 12
-    },
-    tiny: {
-      url: './assets/ascii/tiny6x6.png',
-      charWidth: 6,
-      charHeight: 6,
-      leading: 1
-    },
     medium: {
       url: './assets/ascii/medium6x10.png',
       charWidth: 6,
@@ -62,6 +87,38 @@ const DEFAULT_CONFIG: ConfigData = {
         ':': 3,
         ';': 4,
       }
+    }
+  },
+  mobileController: {
+    enabled: true,
+    colors: {
+      background: '#b8a07d',
+      joystickBase: '#8c7a5b',
+      joystickStick: '#77603f',
+      buttonA: '#77603f',
+      buttonB: '#77603f',
+      buttonX: '#77603f',
+      buttonY: '#77603f',
+      buttonStart: '#77603f',
+      buttonSelect: '#77603f'
+    }
+  },
+  input: {
+    keyBindings: {
+      menu: 'escape',
+      inventory: 'i',
+      move_up: 'w',
+      move_down: 's',
+      move_left: 'a',
+      move_right: 'd',
+      action_up: 'arrowup',
+      action_down: 'arrowdown',
+      action_left: 'arrowleft',
+      action_right: 'arrowright',
+      previous: 'q',
+      next: 'e',
+      interact: 'shift',
+      continue: ' ' // space
     }
   }
 };

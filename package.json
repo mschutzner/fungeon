@@ -1,6 +1,6 @@
 {
   "name": "fungeon",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A 3D game engine with custom shaders and isometric view",
   "main": "dist/main.js",
   "scripts": {
@@ -11,7 +11,11 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
-  "keywords": ["game", "threejs", "typescript"],
+  "keywords": [
+    "game",
+    "threejs",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

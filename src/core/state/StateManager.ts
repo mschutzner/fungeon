@@ -1,6 +1,7 @@
 import { State } from './State';
 import { Renderer } from '../../rendering/Renderer';
 import { TestState } from './TestState';
+import { PathState } from './PathState';
 import { Engine } from '../Engine';
 import { EventSystem } from '../events/EventSystem';
 import { AssetEvents } from '../assets/AssetManager';
@@ -31,9 +32,7 @@ export class StateManager {
   constructor() {
     // Register available states
     this.registerStateType('testState', TestState);
-    
-    // Register other constraint demos here when they're implemented
-    // Only IK demo remains to be implemented
+    this.registerStateType('pathState', PathState);
     
     this.eventSystem = EventSystem.getInstance();
     
@@ -197,6 +196,16 @@ export class StateManager {
   update(deltaTime: number): void {
     if (this.currentState && !this.isTransitioning) {
       this.currentState.update(deltaTime);
+    }
+  }
+  
+  /**
+   * Render the current state
+   * @param deltaTime Time since last render in seconds
+   */
+  render(deltaTime: number): void {
+    if (this.currentState && !this.isTransitioning) {
+      this.currentState.render(deltaTime);
     }
   }
 } 

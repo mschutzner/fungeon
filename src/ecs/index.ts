@@ -8,35 +8,23 @@ export { Entity } from './Entity';
 export { World } from './World';
 
 // Components
-export { Transform, Vector3, Rotation } from './components/Transform';
 export { ThreeObject } from './components/ThreeObject';
 export { MeshComponent, GeometryType } from './components/MeshComponent';
 export { MaterialComponent } from './components/MaterialComponent';
 export { CameraComponent, CameraType } from './components/CameraComponent';
+export { AnimationComponent } from './components/AnimationComponent';
 export { 
   ConstraintComponent, 
-  ConstraintType, 
-  Axis,
-  TrackAxis, 
-  UpAxis,
-  TransformComponent,
-  TrackToConstraint,
-  LookAtConstraint,
-  CopyTransformConstraint,
-  LimitConstraint,
-  DistanceConstraint,
-  LockConstraint,
-  PathFollowConstraint,
-  OrientConstraint,
-  PivotConstraint,
-  SpringConstraint,
-  FloorConstraint
+  ConstraintType,
+  Constraint, 
+  TrackToConstraint 
 } from './components/ConstraintComponent';
 
 // Systems
 export { SerializationSystem } from './serialization/SerializationSystem';
-export { ThreeSceneSystem } from './systems/ThreeSceneSystem';
 export { CameraSystem } from './systems/CameraSystem';
+export { AnimationSystem } from './systems/AnimationSystem';
+export { SceneSystem } from './systems/SceneSystem';
 export { ConstraintSystem } from './systems/ConstraintSystem';
 
 /**

@@ -57,7 +57,7 @@ export abstract class System implements ISystem {
   }
   
   /**
-   * Update the system
+   * Update the system logic at a fixed timestep
    * @param deltaTime Time since the last update in seconds
    */
   public update(deltaTime: number): void {
@@ -66,11 +66,30 @@ export abstract class System implements ISystem {
   }
   
   /**
-   * Called when the system is updated
+   * Called when the system is updated (fixed timestep)
    * Override this in derived systems
    * @param deltaTime Time since the last update in seconds
    */
   protected abstract onUpdate(deltaTime: number): void;
+  
+  /**
+   * Render the system at the display refresh rate
+   * @param deltaTime Time since the last render in seconds
+   */
+  public render(deltaTime: number): void {
+    if (!this.enabled || !this.world) return;
+    this.onRender(deltaTime);
+  }
+  
+  /**
+   * Called when the system is rendered (variable timestep)
+   * Override this in derived systems if needed
+   * @param deltaTime Time since the last render in seconds
+   */
+  protected onRender(deltaTime: number): void {
+    // Base implementation does nothing
+    // Only override this if the system needs to perform operations during rendering
+  }
   
   /**
    * Clean up the system when it's removed from the world

@@ -6,19 +6,21 @@ import { TextBox } from '../../ui/elements/TextBox';
 import { 
   World, 
   Entity, 
-  Transform, 
   SerializationSystem, 
-  ThreeSceneSystem,
   CameraSystem,
   CameraComponent, 
   CameraType,
   MeshComponent,
   GeometryType,
   ThreeObject,
-  MaterialComponent
+  MaterialComponent,
+  ConstraintComponent,
 } from '../../ecs';
+import { AnimationComponent, AnimationLoopMode } from '../../ecs/components/AnimationComponent';
 import { LightComponent, LightType } from '../../ecs/components/LightComponent';
 import { AssetType, AssetDescriptor } from '../assets/AssetManager';
+import { AnimationSystem } from '../../ecs/systems/AnimationSystem';
+import { InputManager } from '../input/InputManager';
 
 /**
  * TestState state that displays a cube
@@ -29,6 +31,11 @@ export class TestState extends State {
   // UI elements
   private fpsCounter: TextBox | null = null;
   private statusText: TextBox | null = null;
+  private cameraInfoText: TextBox | null = null;
+  
+  // Movement settings
+  private cameraMovementSpeed: number = 0.1; // units per second
+  private cameraRotationSpeed: number = Math.PI / 24; // degrees per second
   
   // Reference to engine
   private engine: Engine;
@@ -37,16 +44,12 @@ export class TestState extends State {
   private world: World | null = null;
   
   // ECS Entity IDs
-  private cubeEntityId: number = -1;
+  private trackerEntityId: number = -1;
   private monkeyEntityId: number = -1;
   private cameraEntityId: number = -1;
   
   // Systems
-  private threeSceneSystem: ThreeSceneSystem | null = null;
   private cameraSystem: CameraSystem | null = null;
-  
-  // Test texture
-  private testTextureId = 'uv_test';
   
   constructor(engine: Engine) {
     super('testState');
@@ -55,20 +58,25 @@ export class TestState extends State {
     // Define assets to preload
     this.assets = [
       {
-        id: this.testTextureId,
-        type: AssetType.TEXTURE,
-        path: 'textures/uv-test.jpg'
-      },
-      {
-        id: 'monkey',
-        type: AssetType.MODEL,
-        path: 'models/monkey.glb'
-      },
-      {
         id: 'medium',
         type: AssetType.FONT,
         path: 'ascii/medium6x10.png'
-      }
+      },
+      {
+        id: 'wukong',
+        type: AssetType.MODEL,
+        path: 'models/wukong.glb'
+      },
+      {
+        id: 'wukong-texture',
+        type: AssetType.TEXTURE,
+        path: 'textures/wukong.png'
+      },
+      {
+        id: 'uv-test',
+        type: AssetType.TEXTURE,
+        path: 'textures/uv-test.jpg'
+      },
     ];
   }
   
@@ -97,11 +105,11 @@ export class TestState extends State {
       this.world.setAmbientLightIntensity(0.5);
     }
     
+    // Create tracker entity
+    this.createTrackerEntity();
+
     // Create camera entity
     this.createCameraEntity();
-
-    // create cube entity
-    //this.createCubeEntity();
 
     // create monkey entity
     this.createMonkeyEntity();
@@ -122,19 +130,19 @@ export class TestState extends State {
     console.log("Creating ECS world for monkey test");
     
     // Register component types for serialization
-    this.world.registerComponent('Transform', Transform);
     this.world.registerComponent('CameraComponent', CameraComponent);
     this.world.registerComponent('MeshComponent', MeshComponent);
     this.world.registerComponent('MaterialComponent', MaterialComponent);
+    this.world.registerComponent('AnimationComponent', AnimationComponent);
     
     // Initialize core systems - this will set up ThreeSceneSystem and CameraSystem
     this.world.initializeCoreEcsSystems();
     
     // Register additional systems
     this.world.registerSystem(new SerializationSystem());
+    this.world.registerSystem(new AnimationSystem());
     
     // Get references to systems for convenience
-    this.threeSceneSystem = this.world.getThreeSceneSystem();
     this.cameraSystem = this.world.getCameraSystem();
     
     // Connect the renderer with our ECS world
@@ -144,6 +152,24 @@ export class TestState extends State {
     }
     
     console.log('ECS World initialized with core systems');
+  }
+
+  /**
+   * Create a tracker entity
+   */
+  private createTrackerEntity(): void {
+    if (!this.world) return;
+
+    // Create a new entity for the tracker
+    const trackerEntity = this.world.createEntity('tracker');
+
+    // Add ThreeObject component
+    const threeObject = new ThreeObject(new THREE.Vector3(0, 1, 0));
+    trackerEntity.addComponent(threeObject);
+    
+    this.trackerEntityId = trackerEntity.id;
+
+    console.log('Tracker entity created with ID:', this.trackerEntityId);
   }
   
   /**
@@ -163,8 +189,8 @@ export class TestState extends State {
     const cameraEntity = this.cameraSystem.createCamera(
       'mainCamera',
       CameraType.PERSPECTIVE,
-      new THREE.Vector3(0, 0, 2.5),
-      new THREE.Euler(0, 0, 0),
+      new THREE.Vector3(0, 1.2, 1.2),
+      new THREE.Euler(Math.PI / -12, 0, 0),
       true // Make this the active camera
     );
     
@@ -176,11 +202,19 @@ export class TestState extends State {
       cameraComponent.setClippingPlanes(0.1, 1000);
       cameraComponent.setClearColor('#222034'); // Set clear color to #222034
     }
+
+    const constraintComponent = new ConstraintComponent();
+    constraintComponent.createTrackToConstraint(this.trackerEntityId);
+    cameraEntity.addComponent(constraintComponent);
     
     // Store the entity ID for later reference
     this.cameraEntityId = cameraEntity.id;
     
     console.log('Camera entity created with ID:', this.cameraEntityId);
+    console.log('Camera Controls:');
+    console.log('  Movement: WASD (forward/backward/left/right)');
+    console.log('  Up/Down: Q/E');
+    console.log('  Rotation: Arrow Keys');
   }
   
   /**
@@ -191,7 +225,6 @@ export class TestState extends State {
     
     // Cleanup resources
     this.scene = null;
-    this.threeSceneSystem = null;
     this.cameraSystem = null;
     this.world = null;
     
@@ -232,90 +265,208 @@ export class TestState extends State {
     );
     uiSystem.addElement(this.statusText);
     
+    // Camera info text in the bottom-left
+    this.cameraInfoText = new TextBox(
+      2,
+      renderer.getHeight() - 24,
+      200,
+      20,
+      'Camera Position: (0,0,0)',
+      'medium',
+      1,
+      '#00ff00',
+      'left'
+    );
+    uiSystem.addElement(this.cameraInfoText);
+    
     console.log('UI elements created');
   }
   
   /**
    * Update the state
-   * @param deltaTime Time since last frame in seconds
+   * @param deltaTime Time since last update in seconds
    */
   update(deltaTime: number): void {
-    // Update the world
+    // Update camera controls
+    this.updateCameraControls(deltaTime);
+    
+    // Update monkey rotation
+    this.updateMonkeyRotation();
+    
+    // Update UI elements
+    this.updateUIElements();
+    
+    // Update the ECS world
     if (this.world) {
       this.world.update(deltaTime);
-    } 
-
-    // this.updateCubeRotation();
-    this.updateMonkeyRotation();
-    // Update FPS text
-    if (this.fpsCounter) {
-      // Use explicit line break for better formatting
-      this.fpsCounter.setText(`FPS: ${this.engine.getFps()}\nTPS: ${this.engine.getTps()}`);
     }
-
-    // Update entity count
-    if (this.statusText) {
-      if (this.world) {
-        const entityCount = this.world.getAllEntities().length;
-        this.statusText.setText(`ENTITIES: ${entityCount}`);
-      } else {
-        this.statusText.setText('NO ECS');
-      }
+  }
+  
+  /**
+   * Render the state
+   * This is called during the render loop at the display's refresh rate
+   * @param deltaTime Time since last render in seconds
+   */
+  render(deltaTime: number): void {
+    // Render ECS world (which handles rendering systems)
+    if (this.world) {
+      this.world.render(deltaTime);
     }
   }
 
-  private createCubeEntity(): void {
-    if (!this.world) return;
+  /**
+   * Handle camera movement and rotation with keyboard controls
+   * @param deltaTime Time since last frame in seconds
+   */
+  private updateCameraControls(deltaTime: number): void {
+    if (!this.world || !this.cameraEntityId) return;
     
-    // Create a new entity for the cube
-    const cubeEntity = this.world.createEntity('cube');
+    // Get input manager
+    const inputManager = InputManager.getInstance();
     
-    // Add transform component with position at (0,0,0)
-    const transform = new Transform(0, 0, 0);
-    cubeEntity.addComponent(transform);
+    // Get the camera entity
+    const cameraEntity = this.world.getEntity(this.cameraEntityId);
+    if (!cameraEntity) return;
     
-    // Add ThreeObject component
-    const objectComponent = new ThreeObject();
-    cubeEntity.addComponent(objectComponent);
+    // Get the transform component
+    const threeObject = cameraEntity.getComponent(ThreeObject);
+    if (!threeObject) return;
 
-    // Add MeshComponent with a cube geometry
-    const meshComponent = new MeshComponent(GeometryType.BOX, 0x00ff00);
-    cubeEntity.addComponent(meshComponent);
-
-    // Get the preloaded texture
-    const texture = this.assetManager.getTexture(this.testTextureId);
-
-    // Add material component with the texture
-    const materialComponent = new MaterialComponent({
-      map: texture
-    });
-    cubeEntity.addComponent(materialComponent);
-
-    // Store the entity ID for later reference
-    this.cubeEntityId = cubeEntity.id;
+    const cameraObject = threeObject.object;
     
-    console.log('Cube entity created with ID:', this.cubeEntityId);
+    // Calculate movement speed based on deltaTime
+    const moveAmount = this.cameraMovementSpeed;
+    const rotateAmount = this.cameraRotationSpeed;
+    
+    // Movement controls - WASD for horizontal, QE for vertical
+    if (inputManager.isKeyDown('w')) {
+      cameraObject.translateZ(-moveAmount);
+    }
+    
+    if (inputManager.isKeyDown('s')) {
+      cameraObject.translateZ(moveAmount);
+    }
+    
+    if (inputManager.isKeyDown('a')) {
+      cameraObject.translateX(-moveAmount);
+    }
+    
+    if (inputManager.isKeyDown('d')) {
+      cameraObject.translateX(moveAmount);
+    }
+    
+    if (inputManager.isKeyDown('e') ) {
+      cameraObject.translateY(moveAmount);
+    }
+    
+    if (inputManager.isKeyDown('q')) {
+      cameraObject.translateY(-moveAmount);
+    }
+    
+    // Rotation controls - Arrow keys
+    // Pitch up/down - around local X axis
+    if (inputManager.isKeyDown('ArrowUp')) {
+      cameraObject.rotateX(rotateAmount);
+    }
+    
+    if (inputManager.isKeyDown('ArrowDown')) {
+      cameraObject.rotateX(-rotateAmount);
+    }
+    
+    // Yaw left/right - around world Y axis
+    if (inputManager.isKeyDown('ArrowLeft')) {
+      cameraObject.rotateOnWorldAxis( new THREE.Vector3( 0, 1, 0 ), rotateAmount);
+    }
+    
+    if (inputManager.isKeyDown('ArrowRight')) {
+      cameraObject.rotateOnWorldAxis( new THREE.Vector3( 0, 1, 0 ), -rotateAmount);
+    }
+  }
+
+  /**
+   * Update camera information display
+   */
+  private updateCameraInfoDisplay(): void {
+    if (!this.cameraInfoText || !this.world || !this.cameraEntityId) return;
+    
+    const cameraEntity = this.world.getEntity(this.cameraEntityId);
+    if (!cameraEntity) return;
+    
+    const threeObject = cameraEntity.getComponent(ThreeObject);
+    if (!threeObject) return;
+
+    const cameraObject = threeObject.object;
+    
+    const position = cameraObject.position.clone();
+    const rotation = cameraObject.rotation.clone();
+
+    rotation.x = THREE.MathUtils.radToDeg(rotation.x);
+    rotation.y = THREE.MathUtils.radToDeg(rotation.y);
+    rotation.z = THREE.MathUtils.radToDeg(rotation.z);
+    
+    // Display camera position and rotation
+    this.cameraInfoText.setText(
+      `Pos: (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})\n` +
+      `Rot: (${rotation.x.toFixed(1)}, ${rotation.y.toFixed(1)}, ${rotation.z.toFixed(1)})`
+    );
   }
 
   private createMonkeyEntity(): void {
     if (!this.world) return;
-    
+
     // Create a new entity for the cube
     const monkeyEntity = this.world.createEntity('monkey');
     
-    // Add transform component with position at (0,0,0)
-    monkeyEntity.addComponent(new Transform(0, 0, 0));
-    
     // Add ThreeObject component
-    monkeyEntity.addComponent(new ThreeObject());
+    const threeObject = new ThreeObject(new THREE.Vector3(0, 0, 0));
+    monkeyEntity.addComponent(threeObject);
 
-    // Add MeshComponent with a cube geometry
-    const geometry = this.assetManager.getModelGeometry('monkey');
-    const meshComponent = new MeshComponent(GeometryType.MODEL, 0x808080, geometry);
-    monkeyEntity.addComponent(meshComponent);
+    // Get model geometry and animations
+    const model = this.assetManager.getModel('wukong');
+    const geometry = model?.geometry;
+    const animations = model?.animations || [];
+    const skeleton = model?.skeleton;
+    const rootBone = model?.rootBone;
+    
+    // If we have a skeleton, create a skinned mesh
+    if (skeleton && geometry) {
+      console.log('Creating model with skeleton');
+      const meshComponent = new MeshComponent(
+        GeometryType.MODEL, 
+        0x808080, 
+        geometry,
+        skeleton,
+        rootBone
+      );
+      monkeyEntity.addComponent(meshComponent);
+    } else {
+      // Otherwise, create a regular mesh
+      console.log('Creating model without skeleton');
+      const meshComponent = new MeshComponent(GeometryType.MODEL, 0x808080, geometry);
+      monkeyEntity.addComponent(meshComponent);
+    }
 
-    monkeyEntity.addComponent(new MaterialComponent());
-
+    // Get the preloaded texture
+    const texture = this.assetManager.getTexture('wukong-texture');
+    if (texture) {
+      texture.flipY = false;
+    }
+    
+    // Add material component with the texture
+    const materialComponent = new MaterialComponent({
+      map: texture,
+      transparent: true,
+    });
+    monkeyEntity.addComponent(materialComponent);
+    
+    // Add animation component with the model animations
+    const animComponent = new AnimationComponent(animations);
+    monkeyEntity.addComponent(animComponent);
+    
+    // Play wave animation in ping-pong mode
+    animComponent.loopMode = AnimationLoopMode.PING_PONG;
+    animComponent.playPingPong('wave');
+    
     // Store the entity ID for later reference
     this.monkeyEntityId = monkeyEntity.id;
     
@@ -331,15 +482,11 @@ export class TestState extends State {
     // Create a new entity for the point light
     const lightEntity = this.world.createEntity('pointLight');
     
-    // Add transform component with position at (2,2,2)
-    const transform = new Transform(2, 2, 2);
-    lightEntity.addComponent(transform);
-    
     // Add ThreeObject component
-    lightEntity.addComponent(new ThreeObject());
+    lightEntity.addComponent(new ThreeObject(new THREE.Vector3(2, 2, 2)));
     
     // Add LightComponent
-    const lightComponent = new LightComponent(LightType.POINT, 0xffffff, 5.0);
+    const lightComponent = new LightComponent(LightType.POINT, 0xffffff, 2.5);
     
     // Add the light component to the entity
     lightEntity.addComponent(lightComponent);
@@ -347,32 +494,33 @@ export class TestState extends State {
     console.log('Point light created at position (2,2,2)');
   }
 
-  private updateCubeRotation(): void {
-    if (!this.world) return;
-    
-    // Get the cube entity
-    const cubeEntity = this.world.getEntity(this.cubeEntityId);
-    if (!cubeEntity) return;
-    
-    // Get the transform component
-    const transform = cubeEntity.getComponent(Transform);
-    if (!transform) return; 
-
-    transform.rotate([3.75,3.75,0]);
-  }
-
   private updateMonkeyRotation(): void {
-    if (!this.world) return;
+    if (!this.world || !this.monkeyEntityId) return;
     
     // Get the cube entity
     const monkeyEntity = this.world.getEntity(this.monkeyEntityId);
     if (!monkeyEntity) return;
-    
-    // Get the transform component
-    const transform = monkeyEntity.getComponent(Transform);
-    if (!transform) return; 
-
-    transform.rotate([0,3.75,0]);
   }
   
+  /**
+   * Update UI elements
+   */
+  private updateUIElements(): void {
+    // Update camera info display
+    this.updateCameraInfoDisplay();
+    
+    // Update FPS text
+    if (this.fpsCounter) {
+      // Use explicit line break for better formatting
+      this.fpsCounter.setText(`FPS: ${this.engine.getFps()}\nTPS: ${this.engine.getTps()}`);
+    }
+
+    // Update entity count
+    if (this.statusText && this.world) {
+      const entityCount = this.world.getAllEntities().length;
+      this.statusText.setText(`ENTITIES: ${entityCount}`);
+    } else if (this.statusText) {
+      this.statusText.setText('NO ECS');
+    }
+  }
 } 

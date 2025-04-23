@@ -1,4 +1,5 @@
 import { EventSystem } from '../events/EventSystem';
+import { InputMapper } from './InputMapper';
 
 /**
  * Input events
@@ -24,6 +25,7 @@ export interface KeyState {
   isPressed: boolean;
   pressedTime: number;
   releasedTime: number;
+  repeat: boolean; // Track if this is a repeat event
 }
 
 /**
@@ -90,6 +92,8 @@ export class InputManager {
   // Input state
   private isEnabled: boolean = false;
   
+  private inputMapper: InputMapper | null = null;
+  
   /**
    * Private constructor (use getInstance instead)
    */
@@ -135,6 +139,10 @@ export class InputManager {
     // Enable input
     this.enable();
     
+    // Initialize input mapper
+    this.inputMapper = InputMapper.getInstance();
+    this.inputMapper.initialize();
+    
     console.log('Input manager initialized');
   }
   
@@ -170,7 +178,7 @@ export class InputManager {
    * @returns True if key is down
    */
   public isKeyDown(key: string): boolean {
-    return this.keys.has(key) && this.keys.get(key)!.isDown;
+    return this.keys.has(key.toLowerCase()) && this.keys.get(key.toLowerCase())!.isDown;
   }
   
   /**
@@ -179,7 +187,7 @@ export class InputManager {
    * @returns True if key was pressed
    */
   public isKeyPressed(key: string): boolean {
-    return this.keys.has(key) && this.keys.get(key)!.isPressed;
+    return this.keys.has(key.toLowerCase()) && this.keys.get(key.toLowerCase())!.isPressed;
   }
   
   /**
@@ -257,6 +265,11 @@ export class InputManager {
     
     // Clear changed touches
     this.touch.changedTouches.clear();
+    
+    // Update the input mapper if it exists
+    if (this.inputMapper) {
+      this.inputMapper.update();
+    }
   }
   
   /**
@@ -311,16 +324,31 @@ export class InputManager {
         isDown: false,
         isPressed: false,
         pressedTime: 0,
-        releasedTime: 0
+        releasedTime: 0,
+        repeat: false
       });
     }
     
     const keyState = this.keys.get(key)!;
     
+    // Check if this is a repeat event (browser auto-repeat)
+    if (event.repeat) {
+      keyState.repeat = true;
+      // We'll publish a repeat event so consumers can handle it if needed,
+      // but we won't treat it as a new press
+      this.eventSystem.publish(InputEventType.KEY_DOWN, {
+        key,
+        event,
+        repeat: true
+      });
+      return;
+    }
+    
     // Only trigger pressed once per key press
     if (!keyState.isDown) {
       keyState.isPressed = true;
       keyState.pressedTime = performance.now();
+      keyState.repeat = false;
     }
     
     keyState.isDown = true;
@@ -328,14 +356,16 @@ export class InputManager {
     // Publish event
     this.eventSystem.publish(InputEventType.KEY_DOWN, {
       key,
-      event
+      event,
+      repeat: false
     });
     
     // Publish key press event
     if (keyState.isPressed) {
       this.eventSystem.publish(InputEventType.KEY_PRESS, {
         key,
-        event
+        event,
+        repeat: false
       });
     }
   }
@@ -352,7 +382,8 @@ export class InputManager {
         isDown: false,
         isPressed: false,
         pressedTime: 0,
-        releasedTime: 0
+        releasedTime: 0,
+        repeat: false
       });
     }
     
@@ -651,5 +682,12 @@ export class InputManager {
     const y = (touch.clientY - rect.top) * scaleY;
     
     return { x, y };
+  }
+  
+  /**
+   * Get the input mapper instance
+   */
+  public getInputMapper(): InputMapper | null {
+    return this.inputMapper;
   }
 } 

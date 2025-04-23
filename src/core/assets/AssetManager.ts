@@ -45,6 +45,9 @@ export enum AssetEvents {
 export interface ModelLoadResult {
   geometry: THREE.BufferGeometry;
   originalModel: THREE.Group;
+  animations: THREE.AnimationClip[];
+  skeleton?: THREE.Skeleton;
+  rootBone?: THREE.Bone;
 }
 
 /**
@@ -208,11 +211,29 @@ export class AssetManager {
         (gltf) => {
           // Extract the first mesh's geometry
           let geometry: THREE.BufferGeometry | null = null;
+          let skeleton: THREE.Skeleton | undefined = undefined;
+          let rootBone: THREE.Bone | undefined = undefined;
           
-          // Find the first mesh with geometry
+          // Find the first mesh with geometry and check for skeleton
           gltf.scene.traverse((child: THREE.Object3D) => {
+            // If we haven't found geometry yet and this is a mesh with geometry
             if (!geometry && child instanceof THREE.Mesh && child.geometry) {
               geometry = child.geometry;
+              
+              // If this is a skinned mesh, extract the skeleton
+              if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+                skeleton = child.skeleton;
+                
+                // Look for root bone of skeleton
+                if (skeleton && skeleton.bones.length > 0) {
+                  // Try to find the root bone (usually the one without a parent or the first in hierarchy)
+                  let possibleRoot = skeleton.bones[0];
+                  while (possibleRoot.parent instanceof THREE.Bone) {
+                    possibleRoot = possibleRoot.parent;
+                  }
+                  rootBone = possibleRoot;
+                }
+              }
             }
           });
           
@@ -224,8 +245,20 @@ export class AssetManager {
           
           const result: ModelLoadResult = {
             geometry: geometry,
-            originalModel: gltf.scene
+            originalModel: gltf.scene,
+            animations: gltf.animations || []
           };
+          
+          // Add skeleton and root bone if found
+          if (skeleton) {
+            result.skeleton = skeleton;
+            console.log(`Skeleton found in model ${id} with ${(skeleton as THREE.Skeleton).bones.length} bones`);
+            
+            if (rootBone) {
+              result.rootBone = rootBone;
+              console.log(`Root bone found for model ${id}: ${(rootBone as THREE.Bone).name || 'unnamed'}`);
+            }
+          }
           
           // Cache the result
           this.cache.set(id, result);
@@ -393,6 +426,16 @@ export class AssetManager {
   public getModelGeometry(id: string): THREE.BufferGeometry | undefined {
     const model = this.getModel(id);
     return model ? model.geometry : undefined;
+  }
+  
+  /**
+   * Get model animations from the cache
+   * @param id Model ID
+   * @returns The cached model animations or empty array if not found
+   */
+  public getModelAnimations(id: string): THREE.AnimationClip[] {
+    const model = this.getModel(id);
+    return model ? model.animations : [];
   }
   
   /**
@@ -571,5 +614,25 @@ export class AssetManager {
    */
   public getLoadedFontNames(): string[] {
     return Array.from(this.fontInfo.keys());
+  }
+
+  /**
+   * Get model skeleton from the cache
+   * @param id Model ID
+   * @returns The cached model skeleton or undefined if not found
+   */
+  public getModelSkeleton(id: string): THREE.Skeleton | undefined {
+    const model = this.getModel(id);
+    return model?.skeleton;
+  }
+
+  /**
+   * Get model root bone from the cache
+   * @param id Model ID
+   * @returns The cached model root bone or undefined if not found
+   */
+  public getModelRootBone(id: string): THREE.Bone | undefined {
+    const model = this.getModel(id);
+    return model?.rootBone;
   }
 } 

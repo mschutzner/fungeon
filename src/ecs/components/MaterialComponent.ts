@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { BaseComponent } from '../Component';
 import { ComponentClass, IEntity } from '../types';
-import { Transform } from './Transform';
 import { ThreeObject } from './ThreeObject';
 import { MeshComponent } from './MeshComponent';
 
@@ -55,7 +54,7 @@ export class MaterialComponent extends BaseComponent {
    * Define dependencies
    */
   public static override getRequirements(): ComponentClass[] {
-    return [Transform, ThreeObject, MeshComponent];
+    return [ThreeObject, MeshComponent];
   }
   
   /**
@@ -91,6 +90,10 @@ export class MaterialComponent extends BaseComponent {
       this.material.dispose();
     }
     
+    if(this.options.map) {
+      this.options.map.colorSpace = THREE.SRGBColorSpace;
+    }
+
     // Create new material
     this.material = new THREE.MeshLambertMaterial({
       color: this.options.color,

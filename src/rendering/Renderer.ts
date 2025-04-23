@@ -4,6 +4,7 @@ import { UISystem } from '../ui/UISystem';
 import { World } from '../ecs/World';
 import { CameraSystem } from '../ecs/systems/CameraSystem';
 import { CameraComponent, CameraType } from '../ecs/components/CameraComponent';
+import { MobileController } from '../ui/MobileController';
 
 export class Renderer {
   // Main output canvas
@@ -33,6 +34,9 @@ export class Renderer {
   private width: number;
   private height: number;
   private pixelRatio: number = 1; // For pixel-perfect rendering
+  
+  // Mobile controller
+  private mobileController: MobileController | null = null;
   
   constructor() {
     // Get configuration
@@ -78,6 +82,9 @@ export class Renderer {
       throw new Error('UI context initialization failed');
     }
     
+    // Check for mobile device and initialize controller if needed
+    this.initializeMobileController(container);
+    
     console.log('Renderer fully initialized with resolution:', this.width, 'x', this.height);
   }
   
@@ -99,10 +106,11 @@ export class Renderer {
     outputCanvas.width = this.width;
     outputCanvas.height = this.height;
     
-    // Clear any existing children
-    while (container.childElementCount > 1) {
+    // Clear any existing children except for mobile controller if it exists
+    const mobileController = document.getElementById('mobile-controller');
+    while (container.childElementCount > (mobileController ? 2 : 1)) {
       const childToRemove = container.lastChild;
-      if (childToRemove && childToRemove !== outputCanvas) {
+      if (childToRemove && childToRemove !== outputCanvas && childToRemove !== mobileController) {
         container.removeChild(childToRemove);
       }
     }
@@ -342,6 +350,16 @@ export class Renderer {
         this.outputCtx.imageSmoothingEnabled = false;
       }
     }
+    
+    // Update mobile controller visibility if present
+    if (this.mobileController) {
+      // Check device type again and update visibility
+      if (MobileController.isMobileDevice()) {
+        this.mobileController.show();
+      } else {
+        this.mobileController.hide();
+      }
+    }
   }
   
   /**
@@ -423,6 +441,35 @@ export class Renderer {
       }
       
       console.log('WebGL canvas cleared');
+    }
+  }
+  
+  /**
+   * Initialize mobile controller if device is mobile
+   */
+  private initializeMobileController(container: HTMLElement): void {
+    const config = Config.getInstance();
+    const controllerConfig = config.config.mobileController;
+    
+    // Only initialize if enabled in config
+    if (controllerConfig && controllerConfig.enabled) {
+      console.log('Initializing mobile controller');
+      
+      // Create and initialize mobile controller
+      this.mobileController = new MobileController();
+      this.mobileController.initialize();
+      
+      // Add controller to container
+      container.appendChild(this.mobileController.getElement());
+      
+      // Show controller if on a mobile device
+      if (MobileController.isMobileDevice()) {
+        console.log('Mobile device detected, showing controller');
+        this.mobileController.show();
+      } else {
+        console.log('Desktop device detected, hiding controller');
+        this.mobileController.hide();
+      }
     }
   }
 } 

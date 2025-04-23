@@ -5,5 +5,5 @@
   },
   "tickRate": 0.1,
   "debug": true,
-  "startState": "testState"
+  "startState": "pathState"
 } 

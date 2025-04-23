@@ -33,10 +33,18 @@ export abstract class State {
   abstract exit(): Promise<void>;
   
   /**
-   * Update state logic
-   * @param deltaTime Time since last frame in seconds
+   * Update state logic at fixed timestep for game logic
+   * This is called during the update loop at a fixed rate (e.g., 10 times per second)
+   * @param deltaTime Time since last update in seconds
    */
   abstract update(deltaTime: number): void;
+  
+  /**
+   * Render state at the display refresh rate for smooth animations
+   * This is called during the render loop at the display's refresh rate (up to 60 FPS)
+   * @param deltaTime Time since last render in seconds
+   */
+  abstract render(deltaTime: number): void;
   
   /**
    * Setup any rendering related data (scenes, UI, etc)

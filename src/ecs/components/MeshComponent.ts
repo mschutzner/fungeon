@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { BaseComponent } from '../Component';
 import { ComponentClass, IEntity } from '../types';
 import { ThreeObject } from './ThreeObject';
-import { Transform } from './Transform';
 
 /**
  * Enum for basic geometry types
@@ -41,6 +40,16 @@ export class MeshComponent extends BaseComponent {
   private mesh: THREE.Mesh | null = null;
   
   /**
+   * The skeleton for skinned meshes
+   */
+  private skeleton: THREE.Skeleton | null = null;
+  
+  /**
+   * The root bone for the skeleton
+   */
+  private rootBone: THREE.Bone | null = null;
+  
+  /**
    * Type of geometry to create
    */
   public geometryType: GeometryType = GeometryType.BOX;
@@ -77,11 +86,15 @@ export class MeshComponent extends BaseComponent {
    * @param geometryType Type of geometry to create
    * @param color Color of the mesh
    * @param geometry Optional BufferGeometry to use when geometryType is MODEL
+   * @param skeleton Optional skeleton for skinned meshes
+   * @param rootBone Optional root bone for the skeleton
    */
   constructor(
     geometryType: GeometryType = GeometryType.BOX, 
     color: number = 0x00ff00,
-    geometry?: THREE.BufferGeometry
+    geometry?: THREE.BufferGeometry,
+    skeleton?: THREE.Skeleton,
+    rootBone?: THREE.Bone
   ) {
     super();
     this.geometryType = geometryType;
@@ -92,6 +105,17 @@ export class MeshComponent extends BaseComponent {
       console.log('Setting geometry directly');
       this.geometry = geometry;
     }
+    
+    // Store the skeleton and root bone if provided
+    if (skeleton) {
+      console.log('Setting skeleton with', skeleton.bones.length, 'bones');
+      this.skeleton = skeleton;
+    }
+    
+    if (rootBone) {
+      console.log('Setting root bone:', rootBone.name || 'unnamed');
+      this.rootBone = rootBone;
+    }
   }
   
   /**
@@ -99,7 +123,7 @@ export class MeshComponent extends BaseComponent {
    */
   public static override getRequirements(): ComponentClass[] {
     // Update dependencies for proper model loading
-    return [Transform, ThreeObject];
+    return [ThreeObject];
   }
   
   /**
@@ -121,7 +145,7 @@ export class MeshComponent extends BaseComponent {
     } else {
       // In Phase 7, we should auto-add ThreeObject to make the integration easier
       console.log(`Adding ThreeObject to entity ${entity.name || entity.id}`);
-      entity.addComponent(new ThreeObject(this.mesh!));
+      entity.addComponent(new ThreeObject(new THREE.Vector3(0, 0, 0), this.mesh!));
     }
   }
   
@@ -344,6 +368,21 @@ export class MeshComponent extends BaseComponent {
       // For grid, use LineSegments instead of Mesh
       const lineSegments = new THREE.LineSegments(this.geometry, this.material);
       this.mesh = lineSegments as unknown as THREE.Mesh;
+    } else if (this.skeleton && this.geometryType === GeometryType.MODEL) {
+      // Create a skinned mesh for models with skeletons
+      console.log('Creating SkinnedMesh with skeleton');
+      const skinnedMesh = new THREE.SkinnedMesh(this.geometry, this.material);
+      
+      // Bind the skeleton to the mesh
+      skinnedMesh.bind(this.skeleton, skinnedMesh.matrixWorld);
+      
+      // If we have a root bone, add it to the mesh
+      if (this.rootBone) {
+        console.log('Adding root bone to SkinnedMesh');
+        skinnedMesh.add(this.rootBone);
+      }
+      
+      this.mesh = skinnedMesh;
     } else {
       this.mesh = new THREE.Mesh(this.geometry, this.material);
     }
@@ -399,6 +438,11 @@ export class MeshComponent extends BaseComponent {
     // Update or create the mesh
     if (this.mesh) {
       this.mesh.geometry = this.geometry;
+      
+      // If we have a skeleton and this is a SkinnedMesh, rebind it
+      if (this.skeleton && this.mesh instanceof THREE.SkinnedMesh) {
+        this.mesh.bind(this.skeleton, this.mesh.matrixWorld);
+      }
     } else {
       this.createMesh();
     }
@@ -411,6 +455,49 @@ export class MeshComponent extends BaseComponent {
         threeObject.setObject(this.mesh);
       }
     }
+  }
+  
+  /**
+   * Set the skeleton for this mesh
+   * @param skeleton The skeleton to use
+   * @param rootBone Optional root bone
+   */
+  public setSkeleton(skeleton: THREE.Skeleton, rootBone?: THREE.Bone): void {
+    this.skeleton = skeleton;
+    
+    if (rootBone) {
+      this.rootBone = rootBone;
+    }
+    
+    // If we already have a mesh, recreate it to use the skeleton
+    if (this.mesh) {
+      this.createMesh();
+      
+      // Update ThreeObject if entity has one
+      const entity = this.entity;
+      if (entity) {
+        const threeObject = entity.getComponent(ThreeObject);
+        if (threeObject) {
+          threeObject.setObject(this.mesh);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Get the current skeleton
+   * @returns The skeleton or null if none
+   */
+  public getSkeleton(): THREE.Skeleton | null {
+    return this.skeleton;
+  }
+  
+  /**
+   * Check if this mesh has a skeleton
+   * @returns True if this mesh has a skeleton
+   */
+  public hasSkeleton(): boolean {
+    return this.skeleton !== null;
   }
   
   /**
@@ -428,6 +515,8 @@ export class MeshComponent extends BaseComponent {
     }
     
     this.mesh = null;
+    this.skeleton = null;
+    this.rootBone = null;
   }
   
   /**
@@ -441,6 +530,7 @@ export class MeshComponent extends BaseComponent {
       size: { ...this.size },
       radius: this.radius,
       segments: this.segments,
+      hasSkeleton: this.skeleton !== null,
     };
   }
   
@@ -468,6 +558,10 @@ export class MeshComponent extends BaseComponent {
     // Restore other parameters
     if (typeof meshData.radius === 'number') this.radius = meshData.radius;
     if (typeof meshData.segments === 'number') this.segments = meshData.segments;
+    
+    // Note: We don't restore the skeleton from serialization
+    // Skeletons are complex objects that should be loaded from the model
+    // The actual skeleton will need to be set using setSkeleton after deserialization
     
     // Recreate the mesh with restored properties
     this.updateMesh();

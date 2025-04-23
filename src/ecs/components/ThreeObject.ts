@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { BaseComponent } from '../Component';
 import { ComponentClass, IEntity } from '../types';
-import { Transform } from './Transform';
 import { Entity } from '../Entity';
-
+import { World } from '../World';
 /**
  * Component that links an entity to a Three.js Object3D
  * This component is responsible for managing the Three.js object
@@ -16,32 +15,28 @@ export class ThreeObject extends BaseComponent {
   public object: THREE.Object3D;
   
   /**
-   * Whether the parent relationship has changed
-   * @internal Used by ThreeSceneSystem
-   */
-  private parentChanged: boolean = false;
-  
-  /**
    * Child entities (for entity hierarchy)
    */
   public children: Entity[] = [];
   
   /**
    * Constructor
+   * @param position The position of the object
    * @param object Optional Three.js object to use (creates a new Object3D if not provided)
    */
-  constructor(object?: THREE.Object3D) {
+  constructor(position: THREE.Vector3, object?: THREE.Object3D) {
     super();
     this.object = object || new THREE.Object3D();
+    this.object.position.set(position.x, position.y, position.z);
   }
   
   /**
-   * In Phase 4, Transform is an optional dependency
-   * In later phases, it will be required
+   * ThreeObject has no requirements as it is the base component for all 3D objects
+   * Other components should list ThreeObject as a requirement
    */
   public static override getRequirements(): ComponentClass[] {
-    // Update to require Transform
-    return [Transform];
+    // ThreeObject has no requirements as it is the foundation component
+    return [];
   }
   
   /**
@@ -56,7 +51,15 @@ export class ThreeObject extends BaseComponent {
     }
     
     this.object = object;
-    this.parentChanged = true;
+    
+    // Re-establish parent-child relationships for all children
+    for (const childEntity of this.children) {
+      const childThreeObj = childEntity.getComponent(ThreeObject);
+      if (childThreeObj) {
+        this.object.add(childThreeObj.object);
+      }
+    }
+    
     return this;
   }
   
@@ -65,8 +68,23 @@ export class ThreeObject extends BaseComponent {
    * @param parentEntity The parent entity (or null to remove parent)
    */
   public setParent(parentEntity: IEntity | null): void {
-    this.parentChanged = true;
-    // Parent-child relationship is managed by the ThreeScene system
+    // Remove from current parent's THREE.js object first
+    if (this.object.parent) {
+      this.object.parent.remove(this.object);
+    }
+    
+    if (parentEntity) {
+      const parentThreeObj = parentEntity.getComponent(ThreeObject);
+      if (parentThreeObj) {
+        // Add this object as a child in the THREE.js scene graph
+        parentThreeObj.object.add(this.object);
+        
+        // Add this entity to parent's children array if not already there
+        if (!parentThreeObj.children.includes(this.entity as Entity)) {
+          parentThreeObj.children.push(this.entity as Entity);
+        }
+      }
+    }
   }
   
   /**
@@ -76,7 +94,12 @@ export class ThreeObject extends BaseComponent {
   public addChild(childEntity: Entity): void {
     if (!this.children.includes(childEntity)) {
       this.children.push(childEntity);
-      this.flagParentChanged();
+      
+      // Update THREE.js hierarchy
+      const childThreeObj = childEntity.getComponent(ThreeObject);
+      if (childThreeObj) {
+        this.object.add(childThreeObj.object);
+      }
     }
   }
   
@@ -89,34 +112,16 @@ export class ThreeObject extends BaseComponent {
     const index = this.children.indexOf(childEntity);
     if (index !== -1) {
       this.children.splice(index, 1);
-      this.flagParentChanged();
+      
+      // Update THREE.js hierarchy
+      const childThreeObj = childEntity.getComponent(ThreeObject);
+      if (childThreeObj && this.object.children.includes(childThreeObj.object)) {
+        this.object.remove(childThreeObj.object);
+      }
+      
       return true;
     }
     return false;
-  }
-  
-  /**
-   * Flag that parent has changed
-   * @internal Used by ThreeSceneSystem
-   */
-  public flagParentChanged(): void {
-    this.parentChanged = true;
-  }
-  
-  /**
-   * Check if parent has changed
-   * @internal Used by ThreeSceneSystem
-   */
-  public hasParentChanged(): boolean {
-    return this.parentChanged;
-  }
-  
-  /**
-   * Clear the parent changed flag
-   * @internal Used by ThreeSceneSystem
-   */
-  public clearParentChanged(): void {
-    this.parentChanged = false;
   }
   
   /**
@@ -127,24 +132,7 @@ export class ThreeObject extends BaseComponent {
     // Initialize object name with entity name or ID
     this.object.name = entity.name || `entity_${entity.id}`;
     
-    // Set up basic connection with Transform component if it exists
-    const transform = entity.getComponent(Transform);
-    if (transform) {
-      // Copy initial transform values to the Three.js object
-      const { position, rotation, scale } = transform;
-      
-      this.object.position.set(position.x, position.y, position.z);
-      
-      // Convert degrees to radians for Three.js
-      const toRad = (deg: number) => deg * (Math.PI / 180);
-      this.object.rotation.set(
-        toRad(rotation.x),
-        toRad(rotation.y),
-        toRad(rotation.z)
-      );
-      
-      this.object.scale.set(scale.x, scale.y, scale.z);
-    }
+    // Scene attachment is now handled by SceneSystem
   }
   
   /**
@@ -152,9 +140,17 @@ export class ThreeObject extends BaseComponent {
    * @param entity The entity this component was removed from
    */
   public override onDetach(entity: IEntity): void {
-    // Remove from parent
+    // Remove from parent in THREE.js scene graph
     if (this.object.parent) {
       this.object.parent.remove(this.object);
+    }
+    
+    // Also remove all children from this object
+    for (const child of this.children) {
+      const childThreeObj = child.getComponent(ThreeObject);
+      if (childThreeObj) {
+        this.object.remove(childThreeObj.object);
+      }
     }
   }
   

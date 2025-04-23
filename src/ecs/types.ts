@@ -164,10 +164,18 @@ export interface ISystem extends IUniqueId {
   initialize(world: IWorld): void;
   
   /**
-   * Update the system
+   * Update the system at a fixed timestep (game logic)
+   * This is called during the update loop at a fixed rate (e.g., 10 times per second)
    * @param deltaTime Time since the last update in seconds
    */
   update(deltaTime: number): void;
+  
+  /**
+   * Render the system at variable timestep (rendering)
+   * This is called during the render loop at the display's refresh rate (up to 60 FPS)
+   * @param deltaTime Time since the last render in seconds
+   */
+  render(deltaTime: number): void;
   
   /**
    * Clean up the system when it's removed from the world
@@ -251,6 +259,12 @@ export interface IWorld extends ISerializable {
    * @param deltaTime Time since the last update in seconds
    */
   update(deltaTime: number): void;
+  
+  /**
+   * Render all systems
+   * @param deltaTime Time since the last render in seconds
+   */
+  render(deltaTime: number): void;
   
   /**
    * Query for entities with specific components

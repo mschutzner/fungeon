@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { BaseComponent } from '../Component';
 import { ComponentClass, IEntity } from '../types';
 import { ThreeObject } from './ThreeObject';
-import { Transform } from './Transform';
 
 /**
  * Light type enum
@@ -66,10 +65,10 @@ export class LightComponent extends BaseComponent {
   }
   
   /**
-   * LightComponent requires Transform and ThreeObject
+   * LightComponent requires ThreeObject
    */
   public static override getRequirements(): ComponentClass[] {
-    return [Transform, ThreeObject];
+    return [ThreeObject];
   }
   
   /**
@@ -80,10 +79,10 @@ export class LightComponent extends BaseComponent {
     // Create light
     this.createLight();
     
-    // Set the light as the ThreeObject
-    const threeObject = entity.getComponent(ThreeObject);
-    if (threeObject && this.light) {
-      threeObject.setObject(this.light);
+    // Get the ThreeObject component and add the light to it
+    const threeObj = entity.getComponent(ThreeObject);
+    if (threeObj && this.light) {
+      threeObj.object.add(this.light);
     }
   }
   
@@ -115,15 +114,16 @@ export class LightComponent extends BaseComponent {
           this.decay
         );
         
-        // Add debug helper if in development mode
-        if (process.env.NODE_ENV === 'development') {
-          const helper = new THREE.PointLightHelper(pointLight, 0.2);
-          pointLight.add(helper);
-        }
-        
         this.light = pointLight;
         break;
     }
+  }
+
+  /**
+   * Get the light object
+   */
+  public getLight(): THREE.Light | null {
+    return this.light;
   }
   
   /**
@@ -138,22 +138,6 @@ export class LightComponent extends BaseComponent {
    */
   private dispose(): void {
     this.disposeLight();
-  }
-  
-  /**
-   * Update the light with current settings
-   */
-  public updateLight(): void {
-    this.createLight();
-    
-    // Update ThreeObject if entity has one
-    const entity = this.entity;
-    if (entity && this.light) {
-      const threeObject = entity.getComponent(ThreeObject);
-      if (threeObject) {
-        threeObject.setObject(this.light);
-      }
-    }
   }
   
   /**
@@ -228,8 +212,5 @@ export class LightComponent extends BaseComponent {
     if (typeof lightData.intensity === 'number') this.intensity = lightData.intensity;
     if (typeof lightData.distance === 'number') this.distance = lightData.distance;
     if (typeof lightData.decay === 'number') this.decay = lightData.decay;
-    
-    // Recreate the light with restored properties
-    this.updateLight();
   }
 } 
