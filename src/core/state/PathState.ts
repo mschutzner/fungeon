@@ -151,14 +151,14 @@ export class PathState extends State {
       this.eventSystem.subscribe(GameInputEventType.MOVE_RIGHT, this.handleMovementAction.bind(this, 'moveRight')),
       
       // Actions for camera rotation
-      this.eventSystem.subscribe(GameInputEventType.ACTION_UP, this.handleMovementAction.bind(this, 'rotateUp')),
-      this.eventSystem.subscribe(GameInputEventType.ACTION_DOWN, this.handleMovementAction.bind(this, 'rotateDown')),
-      this.eventSystem.subscribe(GameInputEventType.ACTION_LEFT, this.handleMovementAction.bind(this, 'rotateLeft')),
-      this.eventSystem.subscribe(GameInputEventType.ACTION_RIGHT, this.handleMovementAction.bind(this, 'rotateRight')),
+      this.eventSystem.subscribe(GameInputEventType.D_UP, this.handleMovementAction.bind(this, 'rotateUp')),
+      this.eventSystem.subscribe(GameInputEventType.D_DOWN, this.handleMovementAction.bind(this, 'rotateDown')),
+      this.eventSystem.subscribe(GameInputEventType.D_LEFT, this.handleMovementAction.bind(this, 'rotateLeft')),
+      this.eventSystem.subscribe(GameInputEventType.D_RIGHT, this.handleMovementAction.bind(this, 'rotateRight')),
       
       // Additional controls
-      this.eventSystem.subscribe(GameInputEventType.PREVIOUS, this.handleMovementAction.bind(this, 'moveDown')),
-      this.eventSystem.subscribe(GameInputEventType.NEXT, this.handleMovementAction.bind(this, 'moveUp')),
+      this.eventSystem.subscribe(GameInputEventType.MINUS, this.handleMovementAction.bind(this, 'moveDown')),
+      this.eventSystem.subscribe(GameInputEventType.PLUS, this.handleMovementAction.bind(this, 'moveUp')),
       
       // Menu triggers path visibility toggle
       this.eventSystem.subscribe(GameInputEventType.INTERACT, this.handleMenuAction.bind(this)),

@@ -1,6 +1,6 @@
-import { Config } from '../core/Config';
-import { MobileInputType } from '../core/input/InputMapper';
-import { InputManager } from '../core/input/InputManager';
+import { Config } from '../Config';
+import { MobileInputType } from './InputMapper';
+import { InputManager } from './InputManager';
 
 /**
  * Represents a state of a joystick
@@ -25,27 +25,22 @@ interface TouchData {
 export class MobileController {
   private element: HTMLElement;
   private leftJoystick: HTMLElement;
-  private rightJoystick: HTMLElement;
+  private dPadContainer: HTMLElement;
+  private dUp: HTMLElement;
+  private dDown: HTMLElement;
+  private dLeft: HTMLElement;
+  private dRight: HTMLElement;
   private buttonA: HTMLElement;
   private buttonB: HTMLElement;
-  private buttonX: HTMLElement;
-  private buttonY: HTMLElement;
+  private buttonPlus: HTMLElement;
+  private buttonMinus: HTMLElement;
   private buttonStart: HTMLElement;
   private buttonSelect: HTMLElement;
   
   private leftJoystickHandle: HTMLElement;
-  private rightJoystickHandle: HTMLElement;
   
   // Joystick states
   private leftJoystickState: JoystickState = {
-    active: false,
-    angle: 0,
-    distance: 0,
-    x: 0,
-    y: 0
-  };
-  
-  private rightJoystickState: JoystickState = {
     active: false,
     angle: 0,
     distance: 0,
@@ -76,14 +71,27 @@ export class MobileController {
     this.leftJoystick = document.createElement('div');
     this.leftJoystick.className = 'joystick left-joystick';
     
-    this.rightJoystick = document.createElement('div');
-    this.rightJoystick.className = 'joystick right-joystick';
+    this.dPadContainer = document.createElement('div');
+    this.dPadContainer.className = 'd-pad-container';
+    
+    this.dUp = document.createElement('div');
+    this.dUp.className = 'd-up';
+    this.dUp.dataset.button = MobileInputType.D_UP;
+    
+    this.dDown = document.createElement('div');
+    this.dDown.className = 'd-down';
+    this.dDown.dataset.button = MobileInputType.D_DOWN;
+    
+    this.dLeft = document.createElement('div');
+    this.dLeft.className = 'd-left';
+    this.dLeft.dataset.button = MobileInputType.D_LEFT;
+    
+    this.dRight = document.createElement('div');
+    this.dRight.className = 'd-right';
+    this.dRight.dataset.button = MobileInputType.D_RIGHT;
     
     this.leftJoystickHandle = document.createElement('div');
     this.leftJoystickHandle.className = 'joystick-handle';
-    
-    this.rightJoystickHandle = document.createElement('div');
-    this.rightJoystickHandle.className = 'joystick-handle';
     
     this.buttonA = document.createElement('div');
     this.buttonA.className = 'button button-a';
@@ -95,15 +103,15 @@ export class MobileController {
     this.buttonB.dataset.button = MobileInputType.BUTTON_B;
     this.buttonB.textContent = 'B';
     
-    this.buttonX = document.createElement('div');
-    this.buttonX.className = 'button button-x';
-    this.buttonX.dataset.button = MobileInputType.BUTTON_X;
-    this.buttonX.textContent = 'X';
+    this.buttonPlus = document.createElement('div');
+    this.buttonPlus.className = 'button button-plus';
+    this.buttonPlus.dataset.button = MobileInputType.BUTTON_PLUS;
+    this.buttonPlus.textContent = '+';
     
-    this.buttonY = document.createElement('div');
-    this.buttonY.className = 'button button-y';
-    this.buttonY.dataset.button = MobileInputType.BUTTON_Y;
-    this.buttonY.textContent = 'Y';
+    this.buttonMinus = document.createElement('div');
+    this.buttonMinus.className = 'button button-minus';
+    this.buttonMinus.dataset.button = MobileInputType.BUTTON_MINUS;
+    this.buttonMinus.textContent = '–';
     
     this.buttonStart = document.createElement('div');
     this.buttonStart.className = 'button button-start';
@@ -118,8 +126,12 @@ export class MobileController {
     // Initialize button states
     this.buttonStates.set(MobileInputType.BUTTON_A, false);
     this.buttonStates.set(MobileInputType.BUTTON_B, false);
-    this.buttonStates.set(MobileInputType.BUTTON_X, false);
-    this.buttonStates.set(MobileInputType.BUTTON_Y, false);
+    this.buttonStates.set(MobileInputType.BUTTON_PLUS, false);
+    this.buttonStates.set(MobileInputType.BUTTON_MINUS, false);
+    this.buttonStates.set(MobileInputType.D_UP, false);
+    this.buttonStates.set(MobileInputType.D_DOWN, false);
+    this.buttonStates.set(MobileInputType.D_LEFT, false);
+    this.buttonStates.set(MobileInputType.D_RIGHT, false);
     this.buttonStates.set(MobileInputType.BUTTON_START, false);
     this.buttonStates.set(MobileInputType.BUTTON_SELECT, false);
   }
@@ -164,6 +176,7 @@ export class MobileController {
         align-items: center;
         touch-action: none;
         user-select: none;
+        font-size: min(2cqh, 3cqw);
       }
       
       #game-container.has-mobile-controller #game-canvas {
@@ -182,7 +195,7 @@ export class MobileController {
         touch-action: none;
       }
       
-      .joystick::before, .joystick::after {
+      .joystick:after{
         content: '';
         position: absolute;
         background: ${colors.joystickStick || '#655640'};
@@ -197,26 +210,26 @@ export class MobileController {
       }
       
       .joystick .caret-up {
-        top: 10%;
-        border-width: 0 2.5cqw 2.5cqw 2.5cqw;
+        top: -0.25em;
+        border-width: 1em;
         border-color: transparent transparent ${colors.joystickStick || '#655640'} transparent;
       }
       
       .joystick .caret-down {
-        bottom: 10%;
-        border-width: 2.5cqw 2.5cqw 0 2.5cqw;
+        bottom: -0.25em;
+        border-width: 1em;
         border-color: ${colors.joystickStick || '#655640'} transparent transparent transparent;
       }
       
       .joystick .caret-left {
-        left: 10%;
-        border-width: 2.5cqw 2.5cqw 2.5cqw 0;
+        left: -0.25em;
+        border-width: 1em;
         border-color: transparent ${colors.joystickStick || '#655640'} transparent transparent;
       }
       
       .joystick .caret-right {
-        right: 10%;
-        border-width: 2.5cqw 0 2.5cqw 2.5cqw;
+        right: -0.25em;
+        border-width: 1em;
         border-color: transparent transparent transparent ${colors.joystickStick || '#655640'};
       }
       
@@ -235,8 +248,87 @@ export class MobileController {
         margin-left: 7.5%;
       }
       
-      .right-joystick {
+      /* D-Pad Styling */
+      .d-pad-container {
+        position: relative;
+        width: 25%;
+        aspect-ratio: 1;
+        border-radius: 50%;
         margin-right: 7.5%;
+        touch-action: none;
+      }
+      
+      .d-up, .d-down, .d-left, .d-right {
+        position: absolute;
+        background: ${colors.dPad || '#655640'};
+        touch-action: none;
+        z-index: 2;
+      }
+      
+      .d-up, .d-down {
+        width: 2.5em;
+        height: 2.5em;
+        left: 35%;
+      }
+      
+      .d-left, .d-right {
+        width: 2.5em;
+        height: 2.5em;
+        top: 35%;
+      }
+      
+      .d-up {
+        top: 0;
+        border-radius: 0.5em 0.5em 0 0 ;
+      }
+      
+      .d-down {
+        bottom: 0;
+        border-radius: 0 0 0.5em 0.5em;
+      }
+      
+      .d-left {
+        left: 0;
+        border-radius: 0.5em 0 0 0.5em;
+      }
+      
+      .d-right {
+        right: 0;
+        border-radius: 0 0.5em 0.5em 0;
+      }
+      
+      .d-up:after, .d-down:after, .d-left:after, .d-right:after {
+        content: '';
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        pointer-events: none;
+        border-width: 1.25em;
+      }
+      
+      .d-up:after {
+        top: 100%;
+        border-color: ${colors.dPad || '#655640'} transparent transparent transparent;
+      }
+      
+      .d-down:after {
+        bottom: 100%;
+        border-color: transparent transparent ${colors.dPad || '#655640'} transparent;
+      }
+      
+      .d-left:after {
+        left: 100%;
+        border-color: transparent transparent transparent ${colors.dPad || '#655640'};
+      }
+      
+      .d-right:after {
+        right: 100%;
+        border-color: transparent ${colors.dPad || '#655640'} transparent transparent;
+      }
+      
+      .d-up.active, .d-down.active, .d-left.active, .d-right.active {
+        filter: brightness(0.9);
       }
       
       .button {
@@ -249,7 +341,7 @@ export class MobileController {
         align-items: center;
         font-family: sans-serif;
         font-weight: bold;
-        color: white;
+        color: ${colors.buttonText || '#ffffff'};
         text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
         font-size: min(3cqh, 4.5cqw);
         touch-action: none;
@@ -284,14 +376,14 @@ export class MobileController {
         right: 25%;
       }
       
-      .button-x {
-        background: ${colors.buttonX || '#3498db'};
+      .button-plus {
+        background: ${colors.buttonPlus || '#3498db'};
         top: 5%;
         left: 25%;
       }
       
-      .button-y {
-        background: ${colors.buttonY || '#2ecc71'};
+      .button-minus {
+        background: ${colors.buttonMinus || '#2ecc71'};
         top: 5%;
         left: 5%;
       }
@@ -319,22 +411,25 @@ export class MobileController {
   private buildControllerDOM(): void {
     // Add directional carets to joysticks
     const leftCarets = this.createJoystickCarets();
-    const rightCarets = this.createJoystickCarets();
     
     leftCarets.forEach(caret => this.leftJoystick.appendChild(caret));
-    rightCarets.forEach(caret => this.rightJoystick.appendChild(caret));
     
     // Add joystick handles
     this.leftJoystick.appendChild(this.leftJoystickHandle);
-    this.rightJoystick.appendChild(this.rightJoystickHandle);
+    
+    // Add d-pad elements to the d-pad container
+    this.dPadContainer.appendChild(this.dUp);
+    this.dPadContainer.appendChild(this.dDown);
+    this.dPadContainer.appendChild(this.dLeft);
+    this.dPadContainer.appendChild(this.dRight);
     
     // Add all elements to the controller
     this.element.appendChild(this.leftJoystick);
-    this.element.appendChild(this.rightJoystick);
+    this.element.appendChild(this.dPadContainer);
     this.element.appendChild(this.buttonA);
     this.element.appendChild(this.buttonB);
-    this.element.appendChild(this.buttonX);
-    this.element.appendChild(this.buttonY);
+    this.element.appendChild(this.buttonPlus);
+    this.element.appendChild(this.buttonMinus);
     this.element.appendChild(this.buttonStart);
     this.element.appendChild(this.buttonSelect);
   }
@@ -363,11 +458,16 @@ export class MobileController {
     
     // Joystick touch handling
     this.leftJoystick.addEventListener('touchstart', this.handleJoystickTouchStart.bind(this, 'left'), { passive: true });
-    this.rightJoystick.addEventListener('touchstart', this.handleJoystickTouchStart.bind(this, 'right'), { passive: true });
+    
+    // D-pad touch handling
+    const dPadButtons = [this.dUp, this.dDown, this.dLeft, this.dRight];
+    dPadButtons.forEach(button => {
+      button.addEventListener('touchstart', this.handleButtonTouchStart.bind(this), { passive: true });
+    });
     
     // Button touch handling
     const buttons = [
-      this.buttonA, this.buttonB, this.buttonX, this.buttonY,
+      this.buttonA, this.buttonB, this.buttonPlus, this.buttonMinus,
       this.buttonStart, this.buttonSelect
     ];
     
@@ -400,8 +500,8 @@ export class MobileController {
    */
   private handleJoystickTouchStart(joystick: 'left' | 'right', event: TouchEvent): void {
     // Get the joystick elements
-    const joystickElement = joystick === 'left' ? this.leftJoystick : this.rightJoystick;
-    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.rightJoystickHandle;
+    const joystickElement = joystick === 'left' ? this.leftJoystick : this.leftJoystick;
+    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.leftJoystickHandle;
     
     // Calculate joystick dimensions on first touch
     if (this.joystickRadius === 0) {
@@ -433,7 +533,7 @@ export class MobileController {
       if (joystick === 'left') {
         this.leftJoystickState.active = true;
       } else {
-        this.rightJoystickState.active = true;
+        this.leftJoystickState.active = true;
       }
       
       // Process initial position
@@ -523,9 +623,9 @@ export class MobileController {
    * Process joystick position
    */
   private processJoystickPosition(joystick: 'left' | 'right', clientX: number, clientY: number): void {
-    const joystickElement = joystick === 'left' ? this.leftJoystick : this.rightJoystick;
-    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.rightJoystickHandle;
-    const state = joystick === 'left' ? this.leftJoystickState : this.rightJoystickState;
+    const joystickElement = joystick === 'left' ? this.leftJoystick : this.leftJoystick;
+    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.leftJoystickHandle;
+    const state = joystick === 'left' ? this.leftJoystickState : this.leftJoystickState;
     
     // Get joystick center position
     const rect = joystickElement.getBoundingClientRect();
@@ -569,8 +669,8 @@ export class MobileController {
    * Reset joystick to center position
    */
   private resetJoystick(joystick: 'left' | 'right'): void {
-    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.rightJoystickHandle;
-    const state = joystick === 'left' ? this.leftJoystickState : this.rightJoystickState;
+    const handleElement = joystick === 'left' ? this.leftJoystickHandle : this.leftJoystickHandle;
+    const state = joystick === 'left' ? this.leftJoystickState : this.leftJoystickState;
     
     // Reset handle position
     handleElement.style.transform = 'translate(0px, 0px)';
@@ -621,10 +721,10 @@ export class MobileController {
       const leftActive = x < -threshold;
       const rightActive = x > threshold;
       
-      mapper.handleMobileInput(MobileInputType.JOYSTICK_RIGHT_UP, upActive);
-      mapper.handleMobileInput(MobileInputType.JOYSTICK_RIGHT_DOWN, downActive);
-      mapper.handleMobileInput(MobileInputType.JOYSTICK_RIGHT_LEFT, leftActive);
-      mapper.handleMobileInput(MobileInputType.JOYSTICK_RIGHT_RIGHT, rightActive);
+      mapper.handleMobileInput(MobileInputType.JOYSTICK_LEFT_UP, upActive);
+      mapper.handleMobileInput(MobileInputType.JOYSTICK_LEFT_DOWN, downActive);
+      mapper.handleMobileInput(MobileInputType.JOYSTICK_LEFT_LEFT, leftActive);
+      mapper.handleMobileInput(MobileInputType.JOYSTICK_LEFT_RIGHT, rightActive);
     }
   }
   
@@ -685,7 +785,7 @@ export class MobileController {
    * Get the current state of the right joystick
    */
   public getRightJoystickState(): JoystickState {
-    return { ...this.rightJoystickState };
+    return { ...this.leftJoystickState };
   }
   
   /**

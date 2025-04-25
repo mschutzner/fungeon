@@ -9,16 +9,16 @@ export enum GameInputEventType {
   MOVE_RIGHT = 'game.input.move.right',
   
   // Actions
-  ACTION_UP = 'game.input.action.up',
-  ACTION_DOWN = 'game.input.action.down',
-  ACTION_LEFT = 'game.input.action.left',
-  ACTION_RIGHT = 'game.input.action.right',
+  D_UP = 'game.input.d_up',
+  D_DOWN = 'game.input.d_down',
+  D_LEFT = 'game.input.d_left',
+  D_RIGHT = 'game.input.d_right',
   
   // Navigation
   MENU = 'game.input.menu',
   INVENTORY = 'game.input.inventory',
-  PREVIOUS = 'game.input.previous',
-  NEXT = 'game.input.next',
+  MINUS = 'game.input.minus',
+  PLUS = 'game.input.plus',
   
   // Interaction
   INTERACT = 'game.input.interact',

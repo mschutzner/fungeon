@@ -4,7 +4,7 @@ import { UISystem } from '../ui/UISystem';
 import { World } from '../ecs/World';
 import { CameraSystem } from '../ecs/systems/CameraSystem';
 import { CameraComponent, CameraType } from '../ecs/components/CameraComponent';
-import { MobileController } from '../ui/MobileController';
+import { MobileController } from '../core/input/MobileController';
 
 export class Renderer {
   // Main output canvas

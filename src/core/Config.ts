@@ -29,10 +29,12 @@ interface ConfigData {
       joystickStick?: string;
       buttonA?: string;
       buttonB?: string;
-      buttonX?: string;
-      buttonY?: string;
+      buttonPlus?: string;
+      buttonMinus?: string;
       buttonStart?: string;
       buttonSelect?: string;
+      buttonText?: string;
+      dPad?: string;
     };
     keyBindings?: {
       [key: string]: string;
@@ -46,12 +48,12 @@ interface ConfigData {
       move_down: string;
       move_left: string;
       move_right: string;
-      action_up: string;
-      action_down: string;
-      action_left: string;
-      action_right: string;
-      previous: string;
-      next: string;
+      d_up: string;
+      d_down: string;
+      d_left: string;
+      d_right: string;
+      minus: string;
+      plus: string;
       interact: string;
       continue: string;
       [key: string]: string; // Allow for custom bindings
@@ -70,7 +72,7 @@ const DEFAULT_CONFIG: ConfigData = {
   },
   tickRate: 0.1, // 100ms per tick (10 updates per second)
   maxFPS: 60,    // 60 frames per second rendering
-  debug: true,
+  debug: false,
   startState: 'TestState',
   fonts: {
     medium: {
@@ -94,13 +96,15 @@ const DEFAULT_CONFIG: ConfigData = {
     colors: {
       background: '#b8a07d',
       joystickBase: '#8c7a5b',
-      joystickStick: '#77603f',
+      joystickStick: '#655640',
       buttonA: '#77603f',
       buttonB: '#77603f',
-      buttonX: '#77603f',
-      buttonY: '#77603f',
+      buttonPlus: '#77603f',
+      buttonMinus: '#77603f',
       buttonStart: '#77603f',
-      buttonSelect: '#77603f'
+      buttonSelect: '#77603f',
+      buttonText: '#ffffff',
+      dPad: '#655640'
     }
   },
   input: {
@@ -111,12 +115,12 @@ const DEFAULT_CONFIG: ConfigData = {
       move_down: 's',
       move_left: 'a',
       move_right: 'd',
-      action_up: 'arrowup',
-      action_down: 'arrowdown',
-      action_left: 'arrowleft',
-      action_right: 'arrowright',
-      previous: 'q',
-      next: 'e',
+      d_up: 'arrowup',
+      d_down: 'arrowdown',
+      d_left: 'arrowleft',
+      d_right: 'arrowright',
+      minus: 'q',
+      plus: 'e',
       interact: 'shift',
       continue: ' ' // space
     }
